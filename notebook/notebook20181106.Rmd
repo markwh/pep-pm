@@ -1,0 +1,14 @@
+---
+title: "notebook20181106"
+author: "Mark Hagemann"
+date: "November 6, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Working on slides for skype call with Mike. Already have an outline, now just need to put it together. Slides are in doc/slides/pep-pm-20181106.Rmd.
+
