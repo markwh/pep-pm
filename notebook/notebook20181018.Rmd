@@ -1,0 +1,104 @@
+---
+title: "notebook20181018"
+author: "Mark Hagemann"
+date: "October 18, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Yesterday I did some work making functions for characterizing Manning from swotlists. Now I should be able to run them all. 
+
+Still need to push on optimization method, but stats method should work. 
+
+```{r}
+pep_1n <- reachdata %>% 
+  map(~manning_peek(., man_n = "single"))
+
+qhat_1n <- map(pep_1n, ~.$Q)
+qreal_1n <- map(reachdata, ~apply(.$Q, 2, geomMean))
+
+rrmse_1n <- map2_dbl(qhat_1n, qreal_1n, ~RRMSE(pred = .x, meas = .y))
+
+plot(rrmse_1n)
+
+```
+
+
+```{r}
+pep_nspa <- reachdata %>% 
+  map(~manning_peek(., man_n = "spatial"))
+
+qhat_nspa <- map(pep_nspa, ~.$Q)
+qreal_nspa <- map(reachdata, ~apply(.$Q, 2, geomMean))
+
+rrmse_nspa <- map2_dbl(qhat_nspa, qreal_nspa, ~RRMSE(pred = .x, meas = .y))
+
+plot(rrmse_nspa)
+
+plot(rrmse_nspa, rrmse_1n)
+all.equal(rrmse_nspa, rrmse_1n)
+all.equal(qhat_1n, qhat_nspa)
+```
+
+This is the same, and I think it's by definition, since we're aggregating by geomMean for both n and Q. Let's work out a quick proof. 
+
+$$
+\begin{aligned}
+\log q_t &= \frac{1}{N_s} \sum_s \log\Big(\frac{\dot{q}_{st}}{n_{s}}\Big) \\
+&= \frac{1}{N_s} \sum_s (\log \dot{q}_{st} - \log n_{s})\\
+&= \frac{1}{N_s} \Big( \sum_s (\log \dot{q}_{st}) - \overline{\log n} \Big)\\
+&= \frac{1}{N_s} \Big( \sum_s (\log \dot{q}_{st}) - \overline{\log n} \Big)\\
+\end{aligned}
+$$
+
+Therefore the geometric mean predicted flow is the same for constant or time-variable Manning n. 
+
+
+```{r}
+pep_nmm <- reachdata %>% 
+  map(~manning_peek(., man_n = "metroman"))
+
+qhat_nmm <- map(pep_nmm, ~.$Q)
+qreal_nmm <- map(reachdata, ~apply(.$Q, 2, geomMean))
+
+
+rrmse_nmm <- map2_dbl(qhat_nmm, qreal_nmm, ~RRMSE(pred = .x, meas = .y))
+
+plot(rrmse_nmm)
+
+plot(rrmse_nmm, rrmse_1n); abline(0, 1)
+all.equal(rrmse_nmm, rrmse_1n)
+all.equal(qhat_1n, qhat_nmm)
+```
+
+
+I'm satisfied with that. Now what can I accomplish with optimization?
+
+```{r}
+ffs_1n <- map(reachdata, ~evalff(., man_n = "single"))
+
+startn <- lapply(seq_along(ffs_1n), function(x) 0.005)
+initA0 <- function(swotlist) {
+  exp(bamr:::estimate_logA0(swotlist$W)) * 2
+}
+startA0 <- map(reachdata, ~initA0(.))
+
+startpars <- map2(startn, startA0, ~c(.x * 100, .y / 1000))
+
+foo <- suppressWarnings(nlm(f = ffs_1n[[1]], p = startpars[[1]], iterlim = 500))
+
+alloptim <- map2(ffs_1n, startpars, 
+                 ~suppressWarnings(nlm(.x, p = .y, iterlim = 500)))
+
+allcodes <- map_int(alloptim, ~.$code)
+allrrmse <- map_dbl(alloptim, ~.$minimum)
+
+plot(allrrmse)
+
+```
+
+This isn't working, perhaps because n and A0 parameters are such different orders of magnitude. Try with k = 1 / n. And really, more like 50 * k. 
+

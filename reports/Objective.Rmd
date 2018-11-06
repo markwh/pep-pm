@@ -1,0 +1,37 @@
+---
+title: "Objective"
+author: "Mark Hagemann"
+date: "September 24, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In a forward-McFLI, we can think of the evaluation metrics as objective functions by which to optimize the flow-law parameters. For a parameter set $\theta$, we have the following optimizations:
+
+- **RRMSE**
+
+$$
+\begin{aligned}
+\hat{\theta} &= \arg \min_\theta RRMSE(\hat{Q}(\theta) , Q) \\
+&= \arg \min_\theta \sum_t \Bigg( \frac{\hat{Q_t}(\theta) - Q_t}{Q_t} \Bigg)^2 \\
+&= \arg \min_\theta \sum_t \Bigg( \Big[\frac{\hat{Q_t}(\theta)}{Q_t}\Big]^2 - 2 \frac{\hat{Q}_t(\theta)}{Q_t} \Bigg)
+\end{aligned}
+
+$$
+
+
+
+- **nRMSE**
+
+$$
+\begin{aligned}
+\hat{\theta} &= \arg \min_\theta nRMSE(\hat{Q}(\theta) , Q) \\
+&= \arg \min_\theta \sum_t \Big( \hat{Q_t}(\theta) - Q_t \Big)^2
+\end{aligned}
+$$
+
+
+This is the same as minimizing squared error. RRMSE is, to a first-order approximation, equivalent to minimizing squared error of logQ. 

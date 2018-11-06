@@ -1,0 +1,51 @@
+---
+title: "overview"
+author: "Mark Hagemann"
+date: "September 24, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Pick a case to start with.
+
+```{r}
+testcase <- reachdata$Ganges
+```
+
+What are real Manning parameters?
+
+- Space-constant n
+- Space-varying n
+- MetroMan depth-varying n
+
+
+```{r}
+source("../../mcfli-swotr/lib/manParams.R")
+test_mp <- calcManParams(testcase)
+
+test_mp$n
+test_mp$A0
+test_mp$logQbar
+
+
+
+```
+
+What is the resulting esitmate of discharge these give?
+
+What are the resulting stats?
+
+
+Build it up from simplest case. 
+
+1. Area = true area
+2. Area = calculated dA + true A0 (median)
+3. Area = calculaed dA + optimal A0, based on Q SSE. 
+
+We're at 2 axes of analysis with 3 variants each, for 9 total McMan assessments. 
+
+Then there's AMHG. 

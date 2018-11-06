@@ -1,0 +1,55 @@
+---
+title: "McMan estimation"
+author: "Mark Hagemann"
+date: "September 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+How well can Mass-conserved Manning's equation estimate discharge in the Pepsi 1 cases? Let's find out!
+
+```{r}
+source("../../mcfli-swotr/lib/manParams.R")
+pms1 <- calcManParams(reachdata$Connecticut)
+
+# Steady-state Q estimates
+mcman_q_ss <- function(swotlist) {
+  W <- swotlist$W
+  S <- swotlist$S
+  A <- swotlist$A
+  
+  rhs <- W ^ (-2/3) * A ^ (5/3) * S ^ (1/2)
+  
+  closmat <- rhs / swotlist$Q
+  n <- exp(mean(log(closmat), na.rm = TRUE))
+  qhat <- rhs / n
+  out <- list(n = n,
+              qhat = qhat)
+}
+
+# AMHG Q estimates
+
+amhg_q_ss <- function(swotlist) {
+  W <- swotlist$W
+  
+  logW <- log(W)
+  logQ <- log(swotlist$Q)
+  
+  # logW = a + b logQ + epsilon
+  # logW = b (logQ - logQc) + logWc
+  # logW = (logWc - b * logQc)  + b * logQ
+  
+  sdw <- apply(logW, 1, sd, na.rm = TRUE)
+  sdq <- apply(logQ, 1, sd, na.rm = TRUE)
+  corvec <- map2_dbl(as.data.frame(t(logW)), as.data.frame(t(logQ)), 
+                     cor)
+  bvec <- corvec * sdw / sdq
+  
+  remterm <- logW - swot_vec2mat(bvec, logW) * logQ
+  
+}
+```
+
