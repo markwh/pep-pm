@@ -17,7 +17,6 @@ opts_knit$set(root.dir = "../../")
 
 ```{r, echo = FALSE}
 library(ProjectTemplate)
-getwd()
 load.project()
 
 mytheme <- theme_dark() + theme(plot.background = element_rect(fill = "#a0a0a0"))
@@ -29,7 +28,10 @@ theme_set(mytheme)
 
 - Pepsi challenge inversions were far from perfect
 
-![](../fig/pepsi1-boxplots-dark.png)
+```{r}
+include_graphics("../fig/pepsi1-boxplots-dark.png")
+```
+
 
 ## Pepsi 1 challenge
 
