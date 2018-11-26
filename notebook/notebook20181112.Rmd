@@ -1,0 +1,163 @@
+---
+title: "notebook20181112"
+author: "Mark Hagemann"
+date: "November 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Mike made the good point that I should decompose things into flow-law error and mass-conservation error. I have a vague idea of doing this in a functional programming paradigm. For example:
+
+```{r, eval = FALSE}
+case <- reachdata$Kanawha
+mc(fl(case, method = "manning", params = "optim"), method = "const") # produce a function that returns a swotlist with a Qhat element.
+```
+
+Try it out!
+
+
+```{r}
+#' "params" argument is as follows:
+#' - "manning_bam": n, then A0_median
+#' - "metroman": a (vector), then b vector, then A0_median
+fl <- function(swotlist, method = c("manning_bam", "metroman", "amhg"),
+               params = "optim") {
+  method <- match.arg(method)
+  
+  W <- swotlist$W
+  S <- swotlist$S
+  dA <- swotlist$dA
+  
+  out <- function(params)
+  
+  if (method == "manning_bam") {
+    qdot <- W^{-2/3}
+  }
+  
+}
+
+
+fl_bam <- function(swotlist) {
+  logW <- log(swotlist$W)
+  logS <- log(swotlist$S)
+  dA <- swotlist$dA
+  
+  out <- function(params) {
+    logn <- params[1]
+    A0_med <- params[-1]
+    
+    logA <- log(swot_A(A0vec = A0_med, dAmat = dA, zero = "median"))
+    
+    logQ <- -2/3 * logW + 1/2 * logS + 5/3 * logA - logn
+    
+    outlist <- swotlist
+    outlist$Qhat <- exp(logQ)
+    return(outlist)
+  }
+  out
+}
+
+mc_bam <- function(swotlist, qpiece = c("choose", "Q", "Qhat")) {
+  
+  qpiece <- match.arg(qpiece)
+  qmat <- get_qmat(swotlist, qpiece)
+  
+}
+
+
+mc <- function(swotlist, method = c("bam", "metroman"), 
+               qpiece = c("choose", "Q", "Qhat")) {
+  qpiece <- match.arg(qpiece)
+  
+  if (method == "bam") {
+    out <- mc_bam(swotlist, qpiece)
+  } else if (method == "metroman") {
+    out <- mc_mm(swotlist, qpiece)
+  }
+
+}
+
+get_qmat <- function(swotlist, qpiece = c("choose", "Q", "Qhat")) {
+  qpiece <- match.arg(qpiece)
+  if (qpiece == "choose") {
+    qpiece <- ifelse(is.null(swotlist[["Qhat"]]), "Q", "Qhat")
+  }
+  qmat <- swotlist[[qpiece]]
+  if (is.null(qmat)) stop(sprintf("%s is missing", qpicece))  
+  qmat
+}
+
+```
+
+
+Here is the intended usage. 
+
+```{r, eval = FALSE}
+reachdata$Ganges %>% 
+  fl("bam_manning") %>% 
+  mc("bam") %>% 
+  RRMSE(pred = .$Qhat, meas = .$Q)
+```
+
+This should be a function of parameters that can be optimized (ideally with a gradient attribute). Also need a function to tidy up the vector of parameters. 
+
+This leaves me with the following analysis matrix. 
+
+- Flow laws
+    - omnisciet
+    - BAM Manning (constant n)
+    - MetroMan (variable n)
+    - AMHG
+- Mass conservation
+    - omniscient
+    - MetroMan (dQ/dx = dA/dt)
+    - BAM (geometric mean)
+    - median
+    - mean
+- Metrics
+    - NRMSE (should be equivalent to linear-space RMSE)
+    - RRMSE (should be similar to log-space RMSE)
+    - log-space RMSE
+
+
+## Implementing in lib/mcfl.R
+
+Testing here. 
+
+```{r}
+foo <- reachdata$Ganges %>% 
+  fl("bam_man")
+foo2 <- mc(oper = ., "omniscient")
+foo(pinits)
+bar <- metric(foo, method = "rrmse")
+
+pinits <- c(-3.5, bamr::estimate_logA0(reachdata$Ganges$W) + 2)
+
+fub <- nlm(bar, pinits)
+```
+
+Pipe operator is having some weird functionality here. `mc` is trying to operate on *itself*!
+
+Trying a joined version
+
+```{r}
+foo <- reachdata$Ganges %>% 
+  mcflob(mc = "bam", fl = "bam_man", ob = "rrmse") %>% 
+  nlm(p = pinits)
+pbest <- foo$estimate
+predfun <- mcfl(reachdata$Ganges, mc = "bam", fl = "bam_man")
+
+
+bar <- reachdata$Ganges %>% 
+  mcflob(mc = "bam", fl = "bam_man", ob = "nrmse") %>% 
+  nlm(p = pinits, iterlim = 1500)
+
+foo$estimate
+foo$code
+
+```
+
+What I really need are some gradients. 
