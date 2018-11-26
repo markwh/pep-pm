@@ -18,7 +18,6 @@ mc(fl(case, method = "manning", params = "optim"), method = "const") # produce a
 
 Try it out!
 
-
 ```{r}
 #' "params" argument is as follows:
 #' - "manning_bam": n, then A0_median
@@ -152,11 +151,13 @@ predfun <- mcfl(reachdata$Ganges, mc = "bam", fl = "bam_man")
 
 
 bar <- reachdata$Ganges %>% 
-  mcflob(mc = "bam", fl = "bam_man", ob = "nrmse") %>% 
+  mcflob(mc = "bam", fl = "bam_man", ob = "rrmse") %>% 
   nlm(p = pinits, iterlim = 1500)
 
-foo$estimate
-foo$code
+bar$estimate
+bar$code
+bar$minimum
+bar$iterations
 
 ```
 

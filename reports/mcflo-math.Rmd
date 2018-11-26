@@ -1,0 +1,143 @@
+---
+title: "mcflo-math"
+author: "Mark Hagemann"
+date: "November 22, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document summarizes the mathematical underpinnings of the opitimized mass-conserved flow law approach. There are 3 componenets here, each with a dedicated section below. 
+
+Generally, the function to be optimized is
+
+$$
+g^*(\theta) = g_{obj}(g_{mc}(g_{fl}(\theta, \mathbf{x})))
+$$
+
+where:
+
+- $g_{obj}$ is the objective function to minimize, a performance matric.
+- $g_{mc}$ is the mass-conservation function
+- $g_{fl}$ is the flow-law
+- $\theta$ is a vector of flow-law parameters
+- $\mathbf{x}$ is a list of SWOT observations plus true discharge and bathymetry for a particular river case.
+
+
+The gradient of $g^*$ is given by:
+
+$$
+\nabla g^*(\theta) = \mathbf{J}_{fl}\mathbf{J}_{mc}\nabla g_{obj}(\theta)
+$$
+
+where $\mathbf{J}$ is the Jacobian matrix of the function indicated in the subscript.
+
+## Flow law
+
+The flow law maps SWOT observations and flow-law specific parameters into estimated discharge. 
+
+### Omniscient (baseline case)
+
+A strictly hypothetical "omniscient" flow law simply returns the true discharge. This function has no parameters. The function has the form:
+
+$$
+\hat{Q}_{st} = Q_{st}
+$$
+
+Since there are no parameters, the Jacobian has dimension zero. 
+
+
+### Manning (constant n)
+
+The constant-n Manning equation has the following form:
+
+$$
+\hat{Q}_{st} = \frac{1}{n}W_{st}^{-2/3}(A_{0,s} + \delta A_{st})^{5/3}S_{st}^{1/2}
+$$
+
+**Parameters**: 
+
+- Manning parameters are $A_{0,s}, s = 1, \dots , N_s$ and $n$
+- For numerical stability in optimizing, it is preferable to use $\log A_{0,s}$ and $\log n$. 
+
+
+**Jacobian**: 
+
+- 1st row: 
+
+
+$$
+\begin{aligned}
+\frac{\partial \hat{Q}_{st}}{\partial \log n} &= - \exp(-\log n) x_{st}(\delta A_{st} + A_{0,s})^{5/3} \\
+&= -\hat{Q}_{st}
+\end{aligned}
+$$
+
+- remaining rows: 
+
+$$
+\begin{aligned}
+\frac{\partial \hat{Q}_{st}}{\partial \log A_{0,s}} &= \frac{5}{3}\exp(\log A_{0,s} - \log n)  (\delta A_{st} + \exp(\log A_{0,s}))^{2/3} \\
+&= \frac{5 \hat{Q}_{st}}{3 \hat{A}_{st}}\exp(\log A_{0,s})
+\end{aligned}
+$$
+
+## Mass conservation
+
+### Mean
+
+$$
+\bar{Q}_{st} = \bar{Q}_t = \frac{1}{N_s}\sum_{s'=1}^{N_s} \hat{Q}_{s't})
+$$
+
+**Jacobian**
+
+$$
+\begin{aligned}
+\frac{\partial \bar{Q}_{st}}{\partial \hat{Q}_{s't'}} &=  0, &t \neq t' \\
+&= \frac{1}{N_s}, &t = t' 
+\end{aligned}
+$$
+
+### BAM (geometric mean)
+
+$$
+\bar{Q}_{st} = \bar{Q}_t = \exp(\frac{1}{N_s}\sum_{s'=1}^{N_s}\log \hat{Q}_{s't})
+$$
+
+**Jacobian**
+
+$$
+\begin{aligned}
+\frac{\partial \bar{Q}_{st}}{\partial \hat{Q}_{s't'}} &=  0, &t \neq t' \\
+&= \frac{\log \hat{Q}_{s't}}{N_s \hat{Q}_{s't}} \exp(\frac{1}{N_s} \sum_{s''=1}^{N_s} \log \hat{Q}_{s''t}), &t = t' \\
+&=  \frac{\log \hat{Q}_{s't}}{N_s \hat{Q}_{s't}} \bar{Q}_{t}
+\end{aligned}
+$$
+
+## Objective function
+
+### RRMSE
+
+$$
+\begin{aligned}
+RRMSE(\bar{Q}, Q) &= \sqrt{ \frac{1}{N_s N_{t}} \sum_{s,t} \Bigg( \frac{\bar{Q}_{st} - Q_{st}}{Q_{st}} \Bigg)^2} \\
+&= \Big(\frac{\mathbf{r_r^T r_r}}{N_sN_t}\Big)^{1/2}
+\end{aligned}
+$$
+
+where $\mathbf{r_r}$ denotes the length-$N_s N_t$ vector of relative residuals. 
+
+**Gradient**
+
+$$
+\begin{aligned}
+\frac{\partial RRMSE}{\partial \bar{Q}_{st}} &= \Big(\frac{N_s N_t}{\mathbf{r_r^T r_r}}\Big)^{1/2} \frac{\bar{Q}_{st} - Q_{st}}{N_s N_t Q^2_{st}}  \\
+&= \Big(\frac{1}{N_s N_t \mathbf{r_r^T r_r}}\Big)^{1/2} \frac{\bar{Q}_{st} - Q_{st}}{Q^2_{st}}
+\end{aligned}
+$$
+
+
+### NRMSE

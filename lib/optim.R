@@ -7,28 +7,44 @@
 
 #' These return a function of parameters suitable to bue run in nlm().
 #' 
-#' predfun should be a function of params that produces q predictions, and
-#' has a gradient attribute.
+#' @param mcflfun a "loaded" mass-conserved flow law function, ideally with a 
+#'  gradient attribute
 
-obj_rrmse <- function(predfun, Qobs) {
+metric_rrmse <- function(mcflfun) {
   out <- function(params) {
     
-    swotlist_post <- predfun(params)
+    swotlist_post <- mcflfun(params)
     Qhat <- swotlist_post$Qhat
-    
+    Qobs <- swotlist_post[["Q"]]
     relres <- as.vector((Qhat - Qobs) / Qobs) # vector of relative resids
-    mse <- (relres %*% relres) / length(relres)
-    mse
+    
+    relmse <- as.vector(relres %*% relres) / length(relres)
+    rrmse <- sqrt(relmse)
+    rrmse
   }
   
   gradout <- function(params) {
-    pgrad <- attr(predfun, "gradient")(params)
+    # browser()
+    swotlist_post <- mcflfun(params)
+    Qhat <- swotlist_post$Qhat
+    Qobs <- swotlist_post[["Q"]]    
+    ns <- nrow(Qhat)
+    nt <- ncol(Qhat)
     
-    invqvec <- as.vector(1 / Qobs)
-    invqmat <- t(replicate(invqvec, n = length(params)))
+    # Relative residuals
+    relresmat <- (Qhat - Qobs) / Qobs # matrix of relative resids
+    relresvec <- as.vector(relresmat)
     
-    grad0 <- (pgrad * invqmat) %*% relres
-    grad <- grad0 / ncol(Qobs)
+    # Jacobian matrix of Q predictor (mcfl)
+    pgrad <- attr(mcflfun, "gradient")(params)
+    
+    # objective gradient wrt Qbar (mcfl prediction)
+    ograd1 <- as.vector(sqrt(1 / (ns * nt * relresvec %*% relresvec)))
+    ograd2 <- relresvec / as.vector(Qobs)
+    ograd <- ograd1 * ograd2
+
+    # mcflo gradient (using Jacobian from mcfl)
+    grad <- as.vector(pgrad %*% ograd)
     grad
   }
   

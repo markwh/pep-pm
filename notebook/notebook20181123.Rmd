@@ -1,0 +1,104 @@
+---
+title: "notebook20181123"
+author: "Mark Hagemann"
+date: "November 23, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Still trying to get optimization to work. Documenting math in reports/mcflo-math.Rmd.
+
+- I rechecked my math on the Bam-Manning Jacobian. Appears legit (haven't double-checked the vectorization of the matrix)
+- Now checking the mass-conservation.
+    - Cool, I found a simple bug. Fixed and improved comments.
+    
+Does it work now? 
+
+```{r}
+testcase <- reachdata$Ganges %>% 
+  # swot_sset(keeploc = 1)
+  swot_sset()
+ob1 <- mcflob(swotlist = testcase, 
+              mc = "mean", fl = "bam_man")
+inits1 <- c(-3.5, bamr::estimate_logA0(testcase$W) + 2)
+
+opt1 <- nlm(ob1, inits1)
+opt1$code
+opt1$minimum
+opt1$iterations
+opt1$gradient
+attr(ob1, "gradient")(opt1$estimate)
+```
+
+Let's make a numerical gradient function to test my work
+
+```{r}
+numgrad <- function(fcn, p, delta = 1e-10) {
+  val1 <- fcn(p)
+  
+  toadd <- diag(rep(delta, length(p)))
+  newp <- lapply(1:length(p), function(x) p + toadd[, x])
+  newvals <- vapply(newp, fcn, numeric(1))
+  grad <- (newvals - val1) / delta
+  grad
+}
+```
+
+Test it.
+
+```{r}
+numgrad(ob1, inits1)
+attr(ob1, "gradient")(inits1)
+```
+
+Reveals my gradient is wrong!
+
+Troubleshooting this. Is it the metric_rrmse function? To test that, I need a fake "loaded" mcfl function. 
+
+```{r}
+
+mcflfun <- function(params) {
+  set.seed(12493)
+  out <- list(Qhat = matrix(params, nrow = 1), 
+              Q = matrix(1:6, nrow = 1))
+}
+attr(mcflfun, "gradient") <- function(params) {
+  diag(rep(1, 6))
+}
+obj2 <- metric_rrmse(mcflfun)
+
+qplot(attr(obj2, "gradient")(0:5), numgrad(obj2, 0:5, delta = 1e-13)) +
+  stat_smooth(method = "lm", )
+foodf <- data.frame(calc = attr(obj2, "gradient")(0:5),
+                    numer = numgrad(obj2, 0:5, delta = 1e-14))
+lm(foodf)
+```
+
+I think I fixed the rrmse gradient. But Jocobians must still be wrong. Further testing suggests manning jacobian is alright. Must be mass-conservation. 
+
+
+```{r}
+mcfun2 <- structure(
+  function (params) {
+    set.seed(12493)
+    out <- list(Qhat = matrix(params, nrow = 2), Q = matrix(1:6, 
+        nrow = 2))
+  }, 
+  gradient = function (params) {
+    diag(rep(1, 6))
+  }
+)
+
+
+obj3 <- mc_bam(mcfun2)
+
+obj3(2:7)
+diag(attr(obj3, "gradient")(2:7))
+
+```
+
+
