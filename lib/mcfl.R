@@ -1,18 +1,6 @@
 # Flow-law and mass-conservation functional programming
 
 
-
-#' smartly get q matrix (either Qhat or Q) from a swotlist
-get_qmat <- function(swotlist, qpiece = c("choose", "Q", "Qhat")) {
-  qpiece <- match.arg(qpiece)
-  if (qpiece == "choose") {
-    qpiece <- ifelse(is.null(swotlist[["Qhat"]]), "Q", "Qhat")
-  }
-  qmat <- swotlist[[qpiece]]
-  if (is.null(qmat)) stop(sprintf("%s is missing", qpicece))  
-  qmat
-}
-
 #' "params" argument is as follows:
 #' - "manning_bam": n, then A0_median
 #' - "metroman": a (vector), then b vector, then A0_median
@@ -79,33 +67,142 @@ fl_bamman <- function(swotlist) {
 #' 
 #' Returns a function of the same parameters of which fl is a function.
 #' 
-#' @param fl A flow-law function of params
-mc <- function(oper, 
+#' @param flfun A "loaded" flow-law function of params
+#' 
+#' @importFrom Matrix Diagonal Matrix
+mc <- function(flfun, 
                method = c("bam", "metroman", "median", "mean", "omniscient")) {
   method <- match.arg(method)
   
-  out <- function(params) {
-    if (is.list(oper) && names(oper) == c("value", "visible")) {
-      oper <- oper[["value"]]
-    }
-    stopifnot(is.function(oper))
-    outlist <- oper(params)
-    Qhat <- outlist$Qhat
-    
-    if (method == "omniscient") {
-      Qhat_new <- Qhat
-    } else if (method == "bam") {
-      Qhat_new <- swot_vec2mat(apply(Qhat, 2, geomMean), Qhat)
-    } else if (method == "median") {
-      Qhat_new <- swot_vec2mat(apply(Qhat, 2, median), Qhat)
-    } else if (method == "mean") {
-      Qhat_new <- swot_vec2mat(apply(Qhat, 2, mean), Qhat)
-    } else if (method == "metroman") {
-      stop("metroman mc not ready yet")
-    }
-    outlist$Qhat <- Qhat_new
-    outlist
+  if (method == "omniscient") {
+    mcflfun <- mc_omniscient(flfun)
+  } else if (method == "bam") {
+    mcflfun <- mc_bam(flfun)
+  # } else if (method == "median") {
+  #   Qhat_new <- swot_vec2mat(apply(Qhat, 2, median), Qhat)
+  } else if (method == "mean") {
+    mcflfun <- mc_mean(flfun)
+  } else if (method == "metroman") {
+    stop("metroman mc not ready yet")
   }
+  
+  mcflfun
+}
+
+mc_omniscient <- function(flfun) {
+  
+  out <- function(params) {
+    swotlist <- flfun(params)
+    return(swotlist)
+  }
+  
+  if (is.null(attr(flfun, "gradient"))) {
+    message("flow-law function contains no derivative info. Gradient not used.")
+    return(out)
+  }
+  
+  gradfun <- function(params) {
+    swotlist <- flfun(params)
+    ns <- nrow(swotlist[["W"]])
+    nt <- ncol(swotlist[["W"]])
+    
+    flgrad <- attr(flfun, "gradient")(params) # really a Jacobian matrix
+    # Jacobian of omniscient mc function is identity matrix, so return flgrad
+    flgrad
+  }
+  
+  attr(out, "gradient") <- gradfun
+  out
+}
+
+
+mc_mean <- function(flfun) {
+  
+  out <- function(params) {
+    swotlist <- flfun(params)
+    stopifnot(!is.null(swotlist[["Qhat"]]))
+    Qhat <- swotlist[["Qhat"]]
+    Qhat_new <- swot_vec2mat(apply(Qhat, 2, mean), Qhat)
+    swotlist$Qhat <- Qhat_new
+    swotlist
+  }
+  
+  if (is.null(attr(flfun, "gradient"))) {
+    message("flow-law function contains no derivative info. Gradient not used.")
+    return(out)
+  }
+  
+  gradfun <- function(params) {
+    swotlist <- flfun(params)
+    Qhat <- swotlist[["Qhat"]]
+    
+    # Begin Jacobian calculation (see mcflo-math document)
+    ns <- nrow(Qhat)
+    nt <- ncol(Qhat)
+    tindmat <- matrix(1:nt, nrow = ns, ncol = nt, byrow = TRUE)
+    tindvec <- as.vector(tindmat)
+    # TODO use sparse matrices from Matrix pkg 
+    # http://r.789695.n4.nabble.com/sparse-matrix-from-vector-outer-product-td4701795.html
+    makezero <- outer(tindvec, tindvec, function(x, y) x != y)
+    mcgrad <- matrix(1 / ns, nrow = ns * nt, ncol = ns * nt)
+    mcgrad[makezero] <- 0
+    
+    flgrad <- attr(flfun, "gradient")(params)
+    
+    outmat <- flgrad %*% mcgrad
+    outmat
+  }
+  
+  attr(out, "gradient") <- gradfun
+  
+  out
+}
+
+mc_bam <- function(flfun) {
+
+  out <- function(params) {
+    swotlist <- flfun(params)
+    stopifnot(!is.null(swotlist[["Qhat"]]))
+    Qhat <- swotlist[["Qhat"]]
+    Qhat_new <- swot_vec2mat(apply(Qhat, 2, geomMean), Qhat)
+    swotlist$Qhat <- Qhat_new
+    swotlist
+  }
+  
+  if (is.null(attr(flfun, "gradient"))) {
+    message("flow-law function contains no derivative info. Gradient not used.")
+    return(out)
+  }
+  
+  gradfun <- function(params) {
+    swotlist <- flfun(params)
+    Qhat <- swotlist[["Qhat"]]
+    Qhat_new <- swot_vec2mat(apply(Qhat, 2, geomMean), Qhat)
+    
+    # Begin Jacobian calculation (see mcflo-math document)
+    coefpiece <- log(Qhat) / (nrow(Qhat) * Qhat)
+    coefvec <- as.vector(coefpiece)
+    
+    ns <- nrow(Qhat)
+    nt <- ncol(Qhat)
+    # browser()
+    tindmat <- matrix(1:nt, nrow = ns, ncol = nt, byrow = TRUE)
+    tindvec <- as.vector(tindmat)
+    # TODO use sparse matrices from Matrix pkg 
+    # http://r.789695.n4.nabble.com/sparse-matrix-from-vector-outer-product-td4701795.html
+    makezero <- outer(tindvec, tindvec, function(x, y) x != y)
+    mcgrad <- outer(as.vector(Qhat_new), coefvec)
+    mcgrad[makezero] <- 0
+    
+    # browser()
+    
+    flgrad <- attr(flfun, "gradient")(params)
+    
+    outmat <- flgrad %*% mcgrad
+    outmat
+  }
+  
+  attr(out, "gradient") <- gradfun
   
   out
 }
@@ -131,26 +228,32 @@ mc_mm <- function(Qhat, Amat, tmat, xmat) {
 
 # Performance metrics -----------------------------------------------------
 
-metric <- function(oper, method = c("rrmse", "nrmse")) {
+#' Apply a performance measure to a mcfl function
+#' 
+#' @param mcflfun a "loaded" mass-conserved flow law function 
+#' @param method Which metric to apply
+#' 
+metric <- function(mcflfun, method = c("rrmse", "nrmse")) {
   method <- match.arg(method)
   
-  evalfun <- if (method == "rrmse") RRMSE else 
-    if (method == "nrmse") NRMSE else
-      stop("metric not implemented")
-  
-  out <- function(params) {
-    outlist <- oper(params)
-    
-    out2 <- evalfun(pred = as.vector(outlist[["Qhat"]]), 
-                  meas = as.vector(outlist[["Q"]]))
-    out2
+  if (method == "rrmse") {
+    out <- metric_rrmse(mcflfun)
+  } else {
+    stop(sprintf("%s not implemented", method))
   }
+  
+  out
 }
 
 
 
 # Explicitly joining mc to fl, because piping isn't working ---------------
 
+#' objective, mass-conservation, flow law wrapper
+#' 
+#' Compose flow-law, mass-conservation, and objective functions, and carry through
+#' gradient via Jacobians
+#' 
 mcflob <- function(swotlist,
                  mc = c("bam", "metroman", "median", "mean", "omniscient"),
                  fl = c("bam_man", "metroman", "bam_amhg", "omniscient"),
@@ -158,9 +261,11 @@ mcflob <- function(swotlist,
   fl_method <- match.arg(fl)
   mc_method <- match.arg(mc)
   ob <- match.arg(ob)
-  out1 <- fl(swotlist, method = fl_method)
-  out2 <- mc(out1, method = mc_method)
-  out3 <- metric(out2, method = ob)
-  out3
+  
+  flfun <- fl(swotlist, method = fl_method)  # flow law
+  mcflfun <- mc(flfun, method = mc_method) # mass-conserved flow law
+  omcflfun <- metric(mcflfun, method = ob)
+  
+  omcflfun
 }
 
