@@ -233,11 +233,11 @@ mc_mm <- function(Qhat, Amat, tmat, xmat) {
 #' @param mcflfun a "loaded" mass-conserved flow law function 
 #' @param method Which metric to apply
 #' 
-metric <- function(mcflfun, method = c("rrmse", "nrmse")) {
+metric <- function(mcflfun, method = c("rrmse", "nrmse"), gradient = TRUE) {
   method <- match.arg(method)
   
   if (method == "rrmse") {
-    out <- metric_rrmse(mcflfun)
+    out <- metric_rrmse(mcflfun, gradient = gradient)
   } else {
     stop(sprintf("%s not implemented", method))
   }
@@ -255,16 +255,17 @@ metric <- function(mcflfun, method = c("rrmse", "nrmse")) {
 #' gradient via Jacobians
 #' 
 mcflob <- function(swotlist,
-                 mc = c("bam", "metroman", "median", "mean", "omniscient"),
-                 fl = c("bam_man", "metroman", "bam_amhg", "omniscient"),
-                 ob = c("rrmse", "nrmse")) {
+                   mc = c("bam", "metroman", "median", "mean", "omniscient"),
+                   fl = c("bam_man", "metroman", "bam_amhg", "omniscient"),
+                   ob = c("rrmse", "nrmse"),
+                   gradient = TRUE) {
   fl_method <- match.arg(fl)
   mc_method <- match.arg(mc)
   ob <- match.arg(ob)
   
   flfun <- fl(swotlist, method = fl_method)  # flow law
   mcflfun <- mc(flfun, method = mc_method) # mass-conserved flow law
-  omcflfun <- metric(mcflfun, method = ob)
+  omcflfun <- metric(mcflfun, method = ob, gradient = gradient)
   
   omcflfun
 }

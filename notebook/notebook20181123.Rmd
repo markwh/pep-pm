@@ -20,18 +20,21 @@ Does it work now?
 
 ```{r}
 testcase <- reachdata$Ganges %>% 
-  # swot_sset(keeploc = 1)
-  swot_sset()
+  swot_sset(keeploc = 1:3)
+  # swot_sset()
 ob1 <- mcflob(swotlist = testcase, 
-              mc = "mean", fl = "bam_man")
-inits1 <- c(-3.5, bamr::estimate_logA0(testcase$W) + 2)
+              mc = "mean", fl = "bam_man", 
+              gradient = TRUE)
+              # gradient = FALSE)
+inits1 <- c(-3.5, bamr::estimate_logA0(testcase$W) + 1)
+ob1(inits1)
 
-opt1 <- nlm(ob1, inits1)
+opt1 <- nlm(ob1, inits1)#, print.level = 2)
 opt1$code
 opt1$minimum
 opt1$iterations
 opt1$gradient
-attr(ob1, "gradient")(opt1$estimate)
+attr(ob1(opt1$estimate), "gradient")
 ```
 
 Let's make a numerical gradient function to test my work
@@ -52,7 +55,7 @@ Test it.
 
 ```{r}
 numgrad(ob1, inits1)
-attr(ob1, "gradient")(inits1)
+attr(ob1(inits1), "gradient")
 ```
 
 Reveals my gradient is wrong!

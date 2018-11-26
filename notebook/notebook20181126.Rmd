@@ -1,0 +1,80 @@
+---
+title: "notebook20181126"
+author: "Mark Hagemann"
+date: "November 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Changing tack a little bit. Still working on mcflo optimization. Now I'll try using nloptr package.
+
+```{r}
+install.packages("nloptr")
+library(nloptr)
+```
+
+For now, just hack the thing to separate the objective from the gradient.
+
+
+```{r}
+testcase <- reachdata$Ganges %>% 
+  swot_sset(keeploc = 1:2)
+  # swot_sset()
+ob1 <- mcflob(swotlist = testcase, 
+              mc = "mean", fl = "bam_man")
+inits1 <- c(-3.5, bamr::estimate_logA0(testcase$W) + 2)
+
+ob1_f <- ob1
+attr(ob1_f, "gradient") <- NULL
+ob1_grad <- attr(ob1, "gradient")
+```
+
+Using nloptr intro vignette
+
+```{r}
+opts1 <- list(algorithm = "NLOPT_LD_LBFGS",
+              xto_rel = 1e-8,
+              check_derivatives = TRUE)
+opt1 <- nloptr(x0 = inits1, eval_f = ob1_f, eval_grad_f = ob1_grad,
+               opts = opts1)
+opt1$solution
+```
+
+Try adding constraints
+
+```{r}
+# constraint function
+# A_0 >= -median(dA)
+# -median(dA) - A_0 <= 0
+# -median(dA) - exp(logA0) <= 0
+
+constrfun <- function(params) {
+  out <- -apply(testcase$dA, 2, median) - exp(params[-1])
+}
+constrjac <- function(params) {
+  out1 <- diag(-exp(params[-1]))
+  out <- cbind(rep(0, nrow(out1)), out1) %*% params
+  out
+}
+
+
+opts2 <- list(algorithm = "NLOPT_LD_LBFGS",
+              xto_rel = 1e-8,
+              check_derivatives = TRUE)
+opt2 <- nloptr(x0 = inits1, eval_f = ob1_f, eval_grad_f = ob1_grad,
+               eval_g_ineq = constrfun,
+               eval_jac_g_eq = constrjac,
+               opts = opts1)
+opt1$solution
+```
+
+It seems like the mcflo is non-convex when A0 is not close to optimum.
+
+- At least for Ganges, bam mc gets to optimum, but mean does not. 
+
+
+I need to call it a day on this and switch to swot error stuff. 
+
