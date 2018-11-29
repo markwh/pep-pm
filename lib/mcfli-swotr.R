@@ -15,6 +15,9 @@ findif_x <- function(dawgmat) {
 
 findif_t <- function(dawgmat) {
   difmat <- t(apply(dawgmat, 1, diff))
+  if (ncol(dawgmat) == 2) {
+    difmat <- t(difmat)
+  }
   out1 <- cbind(difmat[, 1], difmat)
   out2 <- cbind(difmat, difmat[, ncol(difmat)])
   out <- (out1 + out2) / 2

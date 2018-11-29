@@ -25,8 +25,8 @@ metric_rrmse <- function(mcflfun, gradient = TRUE) {
     
     #-- begin gradient calculation-----
     # Jacobian matrix of Q predictor (mcfl)
-    pgrad <- attr(mcflfun, "gradient")(params)
-    
+    pgrad <- attr(mcflfun(params), "gradient")
+
     # objective gradient wrt Qbar (mcfl prediction)
     ograd1 <- as.vector(sqrt(1 / (length(relres) * relres %*% relres)))
     ograd2 <- relres / as.vector(Qobs)
@@ -38,6 +38,44 @@ metric_rrmse <- function(mcflfun, gradient = TRUE) {
     #--put it all together---------
     attr(rrmse, "gradient") <- grad
     rrmse
+  }
+  
+  out
+}
+
+
+#' These return a function of parameters suitable to bue run in nlm().
+#' 
+#' @param mcflfun a "loaded" mass-conserved flow law function, ideally with a 
+#'  gradient attribute
+
+metric_nrmse <- function(mcflfun, gradient = TRUE) {
+  out <- function(params) {
+    
+    swotlist_post <- mcflfun(params)
+    Qhat <- swotlist_post$Qhat
+    Qobs <- swotlist_post[["Q"]]
+    resids <- as.vector((Qhat - Qobs)) # vector of relative resids
+    
+    mse <- as.vector(resids %*% resids) / length(resids)
+    nrmse <- sqrt(mse) / mean(Qobs)
+
+    if (!gradient) return(nrmse)
+    
+    #-- begin gradient calculation-----
+    # Jacobian matrix of Q predictor (mcfl)
+    pgrad <- attr(mcflfun(params), "gradient")
+    
+    # objective gradient wrt Qbar (mcfl prediction)
+    ograd1 <- resids / mean(Qobs)
+    ograd <- ograd1 / sqrt(mse) / length(resids)
+    
+    # mcflo gradient (using Jacobian from mcfl)
+    grad <- as.vector(pgrad %*% ograd)
+    
+    #--put it all together---------
+    attr(nrmse, "gradient") <- grad
+    nrmse
   }
   
   out
@@ -166,12 +204,13 @@ npars_metroman <- function(swotlist, mc = TRUE, area = c("stat", "true"),
 #' @importFrom swotr swot_vec2mat
 #' @importFrom purrr map2_dbl map_dbl
 manning_peek <- function(swotlist, man_n = c("single", "spatial", "metroman"),
-                         qagfun = geomMean, nagfun = geomMean) {
+                         qagfun = geomMean, nagfun = geomMean, 
+                         A0fun = median) {
   man_n <- match.arg(man_n)
   swotlist$dA <- rezero_dA(swotlist$dA, "median")
   
   Qvec <- apply(swotlist$Q, 2, qagfun)
-  A0vec <- apply(swotlist$A, 1, median)
+  A0vec <- apply(swotlist$A, 1, A0fun)
   
   Wmat <- swotlist$W
   Smat <- swotlist$S

@@ -25,6 +25,8 @@ where:
 - $\theta$ is a vector of flow-law parameters
 - $\mathbf{x}$ is a list of SWOT observations plus true discharge and bathymetry for a particular river case.
 
+Note: in this document, flow-law predicted discharge will be denoted $\hat{Q}$, and mass-conserved, flow-law predicted discharge will be denoted $\tilde{Q}$.
+
 
 The gradient of $g^*$ is given by:
 
@@ -89,14 +91,14 @@ $$
 ### Mean
 
 $$
-\bar{Q}_{st} = \bar{Q}_t = \frac{1}{N_s}\sum_{s'=1}^{N_s} \hat{Q}_{s't})
+\tilde{Q}_{st} = \tilde{Q}_t = \frac{1}{N_s}\sum_{s'=1}^{N_s} \hat{Q}_{s't})
 $$
 
 **Jacobian**
 
 $$
 \begin{aligned}
-\frac{\partial \bar{Q}_{st}}{\partial \hat{Q}_{s't'}} &=  0, &t \neq t' \\
+\frac{\partial \tilde{Q}_{st}}{\partial \hat{Q}_{s't'}} &=  0, &t \neq t' \\
 &= \frac{1}{N_s}, &t = t' 
 \end{aligned}
 $$
@@ -104,18 +106,46 @@ $$
 ### BAM (geometric mean)
 
 $$
-\bar{Q}_{st} = \bar{Q}_t = \exp(\frac{1}{N_s}\sum_{s'=1}^{N_s}\log \hat{Q}_{s't})
+\tilde{Q}_{st} = \tilde{Q}_t = \exp(\frac{1}{N_s}\sum_{s'=1}^{N_s}\log \hat{Q}_{s't})
 $$
 
 **Jacobian**
 
 $$
 \begin{aligned}
-\frac{\partial \bar{Q}_{st}}{\partial \hat{Q}_{s't'}} &=  0, &t \neq t' \\
-&= \frac{\log \hat{Q}_{s't}}{N_s \hat{Q}_{s't}} \exp(\frac{1}{N_s} \sum_{s''=1}^{N_s} \log \hat{Q}_{s''t}), &t = t' \\
-&=  \frac{\log \hat{Q}_{s't}}{N_s \hat{Q}_{s't}} \bar{Q}_{t}
+\frac{\partial \tilde{Q}_{st}}{\partial \hat{Q}_{s't'}} &=  0, &t \neq t' \\
+&= \frac{1}{N_s \hat{Q}_{s't}} \exp(\frac{1}{N_s} \sum_{s''=1}^{N_s} \log \hat{Q}_{s''t}), &t = t' \\
+&=  \frac{\tilde{Q}_{t}}{N_s \hat{Q}_{s't}}
 \end{aligned}
 $$
+
+### MetroMan (non-steady-state Q)
+
+The MetroMan method of mass-conservation amounts to an adjustment of steady-state Q using information from (estimated) cross-sectional area. This adjustment comes from the instantaneous continuity relationship:
+
+$$
+\frac{\partial Q}{\partial x} = -\frac{\partial A}{\partial t}
+$$
+
+With sufficient temporal resolution, we can approximate this using a finite difference on an estimate of $A$:
+
+$$
+\Delta Q = \frac{\Delta \hat{A}}{\Delta t} \Delta x
+$$
+
+where $\hat{A}_{st} = \hat{A}_{0,s} + \delta A_{st}$ and $\Delta x$ is the cumulative along-stream distance between reaches (i.e. the downstream distance of a reach referenced to a single point), with the $\Delta x = 0$ location chosen such that the mean of $\Delta Q$ is zero. 
+
+The total mass-conserved discharge estimate is then
+
+$$
+\tilde{Q}_{st} = \tilde{Q}^*_{st} + \Delta Q_{st}
+$$
+
+where $\tilde{Q}^*_{st}$ is the steady-state mass-conserved discharge estimate, using the mean method described above. 
+
+**Jacobian**
+
+Since the flow adjustment, $\Delta Q$, is not a function of $\hat{Q}$, the Jacobian of this method is identical to the jacobian with respect to $\tilde{Q}^*_{st}$, given above. 
 
 ## Objective function
 
@@ -123,7 +153,7 @@ $$
 
 $$
 \begin{aligned}
-RRMSE(\bar{Q}, Q) &= \sqrt{ \frac{1}{N_s N_{t}} \sum_{s,t} \Bigg( \frac{\bar{Q}_{st} - Q_{st}}{Q_{st}} \Bigg)^2} \\
+RRMSE(\tilde{Q}, Q) &= \sqrt{ \frac{1}{N_s N_{t}} \sum_{s,t} \Bigg( \frac{\tilde{Q}_{st} - Q_{st}}{Q_{st}} \Bigg)^2} \\
 &= \Big(\frac{\mathbf{r_r^T r_r}}{N_sN_t}\Big)^{1/2}
 \end{aligned}
 $$
@@ -134,10 +164,28 @@ where $\mathbf{r_r}$ denotes the length-$N_s N_t$ vector of relative residuals.
 
 $$
 \begin{aligned}
-\frac{\partial RRMSE}{\partial \bar{Q}_{st}} &= \Big(\frac{N_s N_t}{\mathbf{r_r^T r_r}}\Big)^{1/2} \frac{\bar{Q}_{st} - Q_{st}}{N_s N_t Q^2_{st}}  \\
-&= \Big(\frac{1}{N_s N_t \mathbf{r_r^T r_r}}\Big)^{1/2} \frac{\bar{Q}_{st} - Q_{st}}{Q^2_{st}}
+\frac{\partial RRMSE}{\partial \tilde{Q}_{st}} &= \Big(\frac{N_s N_t}{\mathbf{r_r^T r_r}}\Big)^{1/2} \frac{\tilde{Q}_{st} - Q_{st}}{N_s N_t Q^2_{st}}  \\
+&= \Big(\frac{1}{N_s N_t \mathbf{r_r^T r_r}}\Big)^{1/2} \frac{\tilde{Q}_{st} - Q_{st}}{Q^2_{st}}
 \end{aligned}
 $$
 
 
 ### NRMSE
+
+$$
+\begin{aligned}
+RRMSE(\tilde{Q}, Q) &= \frac{1}{\bar{Q}}\sqrt{ \frac{1}{N_s N_{t}} \sum_{s,t} (\tilde{Q}_{st} - Q_{st})^2 } \\
+&= \frac{1}{\bar{Q}} \Big(\frac{\mathbf{r^T r}}{N_sN_t}\Big)^{1/2}
+\end{aligned}
+$$
+
+where $\mathbf{r}$ denotes the length-$N_s N_t$ vector of residuals, and $\bar{Q}$ is the arithmetic mean (over all $s$ and $t$) of true discharge. 
+
+**Gradient**
+
+$$
+\begin{aligned}
+\frac{\partial NRMSE}{\partial \tilde{Q}_{st}} &= \frac{\tilde{Q}_{st}}{\bar{Q}}\Big(\frac{N_s N_t}{\mathbf{r^T r}}\Big)^{1/2} 
+\end{aligned}
+$$
+

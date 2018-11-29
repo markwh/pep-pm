@@ -1,0 +1,137 @@
+---
+title: "notebook20181129"
+author: "Mark Hagemann"
+date: "November 29, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Picking up with optimization from last week. Now (duh) initialize at "statistically correct" parameters. Where did I do this before?
+
+Right, the `manning_peek()` function in lib/optim.R (should move the function).
+
+```{r}
+
+testcase <- reachdata$Ganges %>% 
+  # swot_sset(keeplocs = 1, keeptimes = 1:2)
+  swot_sset()
+
+statoptim <- manning_peek(testcase)[c("n", "A0")] %>% 
+  unlist() %>% 
+  log()
+
+ob4 <- mcflob(testcase, mc = "bam", fl = "bam_man", ob = "rrmse")
+
+ob4(statoptim)
+numgrad(ob4, statoptim)
+
+## this section for debugging gradient/jacobian
+# testcase$Q
+# flfun4 <- fl(testcase, "bam_man")
+# flfun4(statoptim)$Qhat
+# mcflfun4 <- mc_bam(flfun4)
+# attr(mcflfun4, "gradient")(statoptim)
+# mcflfun4(statoptim)$Qhat
+
+opt4 <- nlm(ob4, p = statoptim)
+opt4$minimum
+opt4$estimate
+statoptim
+```
+
+Fixed the BAM mc jacobian! Stupid mistake in chain-law-ing the exponent.
+
+Next: implement MetroMan mass-conservation.
+
+```{r}
+testcase <- reachdata$Ganges %>% 
+  swot_sset(keeplocs = 1:3, keeptimes = 1:2)
+  # swot_sset()
+statoptim <- manning_peek(testcase)[c("n", "A0")] %>% 
+  unlist() %>% log()
+
+fl5 <- fl(testcase, method = "bam_man")
+fl5(statoptim)$Qhat
+
+Ahat <- fl5(statoptim)$Ahat
+tmat <- fl5(statoptim)$t
+dAdt <- findif_t(Ahat) / findif_t(tmat)
+xmat <- fl5(statoptim)$x - mean(fl5(statoptim)$x)
+conv <- 1 / (3600 * 24)
+
+Qhat1 <- swot_vec2mat(apply(fl5(statoptim)$Qhat, 2, mean), Ahat)
+Qadj <- -dAdt * xmat * conv + mean(dAdt * xmat * conv)
+Qhat <- Qhat1 + Qadj
+
+Qhat
+testcase$Q
+
+```
+
+That appears to work, but how to do gradient?! May need to simplify.
+
+- Identical to mean if I don't readjust Q (remove mean difference)
+- No, appears to be equal to mean even if I center the Qadj (not a function of Qhat). 
+- This should be easy.
+
+
+```{r}
+testcase <- reachdata$Ganges %>% 
+  swot_sset(keeplocs = 1:3, keeptimes = 1:2)
+  # swot_sset()
+statoptim <- manning_peek(testcase)[c("n", "A0")] %>% 
+  unlist() %>% log()
+
+
+ob5 <- mcflob(testcase, mc = "bam", fl = "bam_man", ob = "rrmse")
+
+ob5(statoptim)
+numgrad(ob5, statoptim)
+```
+
+Does it improve on the BAM mass-conservation?
+
+```{r}
+testcase <- reachdata$Ganges %>% 
+  swot_sset()
+
+statoptim <- manning_peek(testcase)[c("n", "A0")] %>% 
+  unlist() %>% 
+  log()
+
+ob6 <- mcflob(testcase, mc = "metroman", fl = "bam_man", ob = "rrmse")
+
+ob6(statoptim)
+numgrad(ob6, statoptim)
+
+opt6 <- nlm(ob6, p = statoptim)
+opt6$minimum
+opt6$estimate
+statoptim
+```
+
+Now I've implemented NRMSE. See how that works.
+
+```{r}
+testcase <- reachdata$Ganges %>% 
+  swot_sset()
+
+statoptim <- manning_peek(testcase)[c("n", "A0")] %>% 
+  unlist() %>% 
+  log()
+
+ob7 <- mcflob(testcase, mc = "mean", fl = "bam_man", ob = "nrmse")
+
+ob7(statoptim)
+numgrad(ob7, statoptim)
+
+opt7 <- nlm(ob7, p = statoptim)
+opt7$minimum
+opt7$estimate
+statoptim
+
+```
+
