@@ -185,7 +185,7 @@ where $\mathbf{r}$ denotes the length-$N_s N_t$ vector of residuals, and $\bar{Q
 
 $$
 \begin{aligned}
-\frac{\partial NRMSE}{\partial \tilde{Q}_{st}} &= \frac{\tilde{Q}_{st}}{\bar{Q}}\Big(\frac{N_s N_t}{\mathbf{r^T r}}\Big)^{1/2} 
+\frac{\partial NRMSE}{\partial \tilde{Q}_{st}} &= \frac{\tilde{Q}_{st} - Q_{st}}{\bar{Q} \sqrt{N_sN_t \mathbf{r^Tr}}}
 \end{aligned}
 $$
 

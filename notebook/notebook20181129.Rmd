@@ -124,6 +124,7 @@ statoptim <- manning_peek(testcase)[c("n", "A0")] %>%
   log()
 
 ob7 <- mcflob(testcase, mc = "mean", fl = "bam_man", ob = "nrmse")
+# ob7 <- mcflob(testcase, mc = "mean", fl = "bam_man", ob = "rrmse")
 
 ob7(statoptim)
 numgrad(ob7, statoptim)
