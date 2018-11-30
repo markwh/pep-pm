@@ -244,6 +244,58 @@ manning_peek <- function(swotlist, man_n = c("single", "spatial", "metroman"),
   params
 }
 
+#' Get flow-law parameters using closure stats
+#' 
+#' 
+
+fl_peek <- function(swotlist, 
+                    fl = c("bam_man", "metroman", "bam_amhg", "omniscient"),
+                    qagfun = geomMean,
+                    nagfun = geomMean) {
+  
+  fl <- match.arg(fl)
+  swotlist$dA <- rezero_dA(swotlist$dA, "median")
+  
+  Qvec <- apply(swotlist$Q, 2, qagfun)
+  A0vec <- apply(swotlist$A, 1, median)
+  
+  Wmat <- swotlist$W
+  Smat <- swotlist$S
+  Amat <- swotlist$dA + swot_vec2mat(A0vec, Wmat)
+  
+  Qmat <- swot_vec2mat(Qvec, Wmat)
+  Qdotmat <- Wmat^(-2/3) * Amat^(5/3) * Smat^(1/2)
+  nmat <- Qdotmat / Qmat
+  
+  ns <- nrow(Wmat)
+  nt <- ncol(Wmat)
+  
+  params <- list()
+  
+  if (fl == "bam_man") {
+    n <- nagfun(nmat)
+    nmat_pred <- matrix(n, nrow = nrow(Wmat), ncol = ncol(Wmat))
+    
+    pnames <- c("logn", paste0("logA0_", 1:ns))
+    params <- c(log(n), log(A0vec))
+    names(params) <- pnames
+    
+  } else if (man_n == "metroman") {
+    npars <- npars_metroman(swotlist, mc = TRUE, area = "stat")
+    nmat_pred <- npars$n
+    
+    pnames <- c(paste0("a_", 1:ns), 
+                paste0("b_", 1:ns),
+                paste0("logA0_", 1:ns))
+    params <- c(npars$a, npars$b, log(A0vec))
+    names(params) <- pnames
+  }
+  
+  params$Q <- Qpred
+  params
+}
+
+
 
 
 

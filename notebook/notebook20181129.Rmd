@@ -136,3 +136,141 @@ statoptim
 
 ```
 
+MetroMan now.
+
+```{r}
+testcase <- reachdata$Ganges %>% 
+  # swot_sset(keeplocs = 1:3, keeptimes = 1:100)
+  swot_sset()
+
+statoptim <- manning_peek(testcase, man_n = "metroman")[c("n_a", "n_b", "A0")] %>% 
+  within(., {A0 = log(A0)}) %>% 
+  unlist() #%>% 
+  # log()
+
+
+ob8 <- mcflob(testcase, mc = "mean", fl = "metroman", ob = "nrmse")
+# ob8 <- mcflob(testcase, mc = "mean", fl = "bam_man", ob = "rrmse")
+
+anlyt <- ob8(statoptim)
+numer <- numgrad(ob8, statoptim)
+summary(attr(anlyt, "gradient") - numer)
+attr(anlyt, "gradient")
+numer
+
+## this section for debugging gradient/jacobian
+# testcase$Q
+# flfun4 <- fl(testcase, "bam_man")
+# flfun4(statoptim)$Qhat
+# mcflfun4 <- mc_bam(flfun4)
+# attr(mcflfun4, "gradient")(statoptim)
+# mcflfun4(statoptim)$Qhat
+
+
+
+opt8 <- nlm(ob8, p = statoptim, print.level = 2)
+opt8$minimum
+opt8$estimate
+statoptim
+```
+
+See if deriv can help.
+
+```{r}
+expr <- y ~ exp(-a - b * (x + dA) / W) * W^(-2/3) * (x + dA)^(5/3) * S^(1/2)
+expr
+
+deriv(expr, c("y", "x"))
+
+```
+
+That's fine. Need to debug manually.
+
+```{r}
+testpars <- c(-3.6222916, -3.6063583, -3.5794698, -3.7953999, -1.1410405, 
+              -4.0149410, -0.2598782, -0.3232485, -0.4996585, -0.3096474, 
+              -1.8025770, -0.1450224, 8.8480024, 9.0065874, 8.6803217, 
+               8.8381524, 8.6506848, 8.5974283)
+anlyt <- ob8(testpars)
+numer <- numgrad(ob8, testpars)
+summary(attr(anlyt, "gradient") - numer)
+attr(anlyt, "gradient")
+numer
+```
+
+
+Now set up the matrix for analysis. 
+
+```{r}
+cases <- names(reachdata)
+flow_laws <- c("bam_man", "metroman", "omniscient")
+mc_types <- c("bam", "metroman", "omniscient")
+metrics <- c("rrmse", "nrmse")
+methods <- c("stats", "optim")
+
+expand.grid(cases, flow_laws, mc_types, metrics, methods)
+```
+
+
+And a function that takes these columns' values as args. Returns a list with: 
+
+- metric value
+- parameters
+- call
+- nlm results (possibly)
+
+
+```{r}
+master_mcflo <- function(case, 
+                         fl = c("bam_man", "metroman", "omniscient"), 
+                         mc = c("bam", "metroman", "omniscient"), 
+                         metric = c("rrmse", "nrmse"), 
+                         method = c("stats", "optim")) {
+  fl <- match.arg(fl)
+  mc <- match.arg(mc)
+  metric <- match.arg(metric)
+  method <- match.arg(method)
+  swotlist <- reachdata[[case]]
+  statparams <- fl_peek(swotlist, fl = fl)
+  
+  mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric)
+  
+  res <- list()
+  
+  if (method == "stats") {
+    res$metric <- mcflo(statparams)
+    res$params <- statparams
+  } else if (method == "optim") {
+    resopt <- nlm(mcflo, p = statparams, iterlim = 500)
+    
+    res$metric <- mcflo(resopt$estimate)
+    res$params <- resopt$estimate
+    res$optim.info <- resopt
+  }
+  
+  res$call <- sys.call()
+  res
+}
+
+foo <- master_mcflo("Ganges", method = "optim")
+
+
+
+```
+
+
+OK, I need to redo manning_peek
+
+- make it fl_peek
+    - have arguments same as fl()
+- Return vector of parameters used by fl()()
+
+
+```{r}
+
+```
+
+
+
+
+

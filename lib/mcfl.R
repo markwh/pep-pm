@@ -10,6 +10,8 @@ fl <- function(swotlist,
   
   if (method == "bam_man") {
     out <- fl_bamman(swotlist)
+  } else if (method == "metroman") {
+    out <- fl_mm(swotlist)
   }
   
   out
@@ -25,22 +27,6 @@ fl_bamman <- function(swotlist) {
   logS <- log(swotlist$S)
   dA <- swotlist$dA
 
-  
-  qgrad <- function(params) {
-    Qhat <- out(params)$Qhat
-    Ahat <- out(params)$Ahat
-    dqdlogn <- -as.vector(Qhat)
-    logA0 <- params[-1]
-    dqdlogA <- 5/3 * Qhat / Ahat * swot_vec2mat(exp(logA0), Qhat)
-    
-    # need a permutation matrix.
-    diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Qhat), 
-                          simplify = FALSE)
-    permmat <- Reduce(diagmats, f = cbind)
-    dlogAmat <- permmat %*% diag(as.vector(dqdlogA))
-    gradmat <- rbind(dqdlogn, dlogAmat)
-    gradmat
-  }
     
   out <- function(params) {
     logn <- params[1]
@@ -74,6 +60,55 @@ fl_bamman <- function(swotlist) {
   out
 }
 
+#' MetroMan flow law
+#' 
+#' Implements a power-law for Manning's n based on depth (A / W)
+
+fl_mm <- function(swotlist) {
+  logW <- log(swotlist$W)
+  logS <- log(swotlist$S)
+  dA <- swotlist$dA
+  
+  
+  out <- function(params) {
+    ns <- nrow(logW)
+    a <- params[1:ns]
+    b <- params[ns + (1:ns)]
+    bmat <- swot_vec2mat(b, logW)
+    logA0 <- params[-1:(-2 * ns)]
+    A0_med <- exp(logA0)
+    Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
+    logA <- log(Amat)
+    logD <- logA - logW
+    logn <- swot_vec2mat(a, logW) + bmat * logD
+    
+    logQ <- -2/3 * logW + 1/2 * logS + 5/3 * logA - logn
+    
+    outlist <- swotlist
+    outlist$Ahat <- Amat
+    Qhat_new <- exp(logQ)
+    outlist$Qhat <- Qhat_new
+    
+    # Gradient-------------------------------------------------------------
+    dqda <- -as.vector(Qhat_new)
+    dqdb <- dqda * as.vector((logA - logW))
+    A0mat <- swot_vec2mat(A0_med, logW)
+    dqdlogA <- (5 - 3 * bmat)/(3 * Amat) * Qhat_new * A0mat
+    
+    # need a permutation matrix.
+    diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Amat), 
+                          simplify = FALSE)
+    permmat <- Reduce(diagmats, f = cbind)
+    dlogAmat <- permmat %*% diag(as.vector(dqdlogA))
+    damat <- permmat %*% diag(dqda)
+    dbmat <- permmat %*% diag(dqdb)
+    gradmat <- rbind(damat, dbmat, dlogAmat)
+    
+    attr(outlist, "gradient") <- gradmat
+    return(outlist)
+  }
+  out
+}
 
 # Mass-conservation functionals -------------------------------------------
 
