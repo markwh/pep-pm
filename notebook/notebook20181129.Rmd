@@ -234,14 +234,17 @@ master_mcflo <- function(case,
   statparams <- fl_peek(swotlist, fl = fl)
   
   mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric)
-  
   res <- list()
   
-  if (method == "stats") {
+  if (fl == "omniscient") {
+    res$metric <- mcflo()
+    res$params <- numeric()
+  } else if (method == "stats") {
     res$metric <- mcflo(statparams)
     res$params <- statparams
   } else if (method == "optim") {
-    resopt <- nlm(mcflo, p = statparams, iterlim = 500)
+    resopt <- R.utils::withTimeout(nlm(mcflo, p = statparams, iterlim = 500), 
+                                   timeout = 3600 * 1.5)
     
     res$metric <- mcflo(resopt$estimate)
     res$params <- resopt$estimate
@@ -252,7 +255,7 @@ master_mcflo <- function(case,
   res
 }
 
-foo <- master_mcflo("Ganges", method = "optim")
+foo <- master_mcflo("Ganges", method = "optim", mc = "omniscient")
 
 
 
@@ -267,9 +270,43 @@ OK, I need to redo manning_peek
 
 
 ```{r}
+cases <- names(reachdata)
+flow_laws <- c("bam_man", "metroman", "omniscient")
+mc_types <- c("bam", "metroman", "omniscient")
+metrics <- c("rrmse", "nrmse")
+methods <- c("stats", "optim")
 
+inputMatrix <- expand.grid(cases, flow_laws, mc_types, metrics, methods, 
+                           stringsAsFactors = FALSE, 
+                           KEEP.OUT.ATTRS = FALSE) %>% 
+  setNames(c("case", "fl", "mc", "metric", "method"))
+
+resultList <- pmap(.l = inputMatrix,
+                   .f = possibly(master_mcflo, otherwise = NA))
+
+cache("resultList")
 ```
 
+See which failed.
+
+```{r}
+failures <- is.na(resultList)
+
+inputMatrix$failed <- failures
+
+head(inputMatrix)
+
+inputMatrix %>% 
+  group_by(case, method) %>% 
+  summarize(pct_fail = sum(failed) / n()) %>% 
+  arrange(desc(pct_fail))
+
+inputMatrix %>% 
+  group_by(mc, fl, method) %>%
+  group_by(metric, method) %>%
+  summarize(pct_fail = sum(failed) / n())
+
+```
 
 
 

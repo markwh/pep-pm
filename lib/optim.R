@@ -12,7 +12,10 @@
 
 metric_rrmse <- function(mcflfun, gradient = TRUE) {
   out <- function(params) {
-    
+    if (missing(params)) {  # for omniscient flow law
+      params <- numeric(0) 
+      gradient <- FALSE
+    }
     swotlist_post <- mcflfun(params)
     Qhat <- swotlist_post$Qhat
     Qobs <- swotlist_post[["Q"]]
@@ -280,7 +283,7 @@ fl_peek <- function(swotlist,
     params <- c(log(n), log(A0vec))
     names(params) <- pnames
     
-  } else if (man_n == "metroman") {
+  } else if (fl == "metroman") {
     npars <- npars_metroman(swotlist, mc = TRUE, area = "stat")
     nmat_pred <- npars$n
     
@@ -289,9 +292,10 @@ fl_peek <- function(swotlist,
                 paste0("logA0_", 1:ns))
     params <- c(npars$a, npars$b, log(A0vec))
     names(params) <- pnames
+  } else if (fl == "omniscient") {
+    params <- NULL
   }
   
-  params$Q <- Qpred
   params
 }
 

@@ -12,6 +12,10 @@ fl <- function(swotlist,
     out <- fl_bamman(swotlist)
   } else if (method == "metroman") {
     out <- fl_mm(swotlist)
+  } else if (method == "bam_amhg") {
+    stop("AMHG flow law not implemented")
+  } else if (method == "omniscient") {
+    out <- fl_omni(swotlist)
   }
   
   out
@@ -107,6 +111,23 @@ fl_mm <- function(swotlist) {
     attr(outlist, "gradient") <- gradmat
     return(outlist)
   }
+  out
+}
+
+#' Omniscient "flow law"
+#' 
+#' Benchmark case--returns true flow, takes no parameters.
+
+fl_omni <- function(swotlist) {
+  out <- function(params = numeric(0)) {
+    if (length(params > 0)) 
+      warning("Nonzero-length param argument supplied.\nOmniscient flow law takes no parameters.")
+    swotlist$Qhat <- swotlist$Q
+    swotlist$Ahat <- swotlist$A
+    
+    swotlist
+  }
+  
   out
 }
 
