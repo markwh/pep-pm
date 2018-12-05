@@ -55,6 +55,11 @@ metric_rrmse <- function(mcflfun, gradient = TRUE) {
 metric_nrmse <- function(mcflfun, gradient = TRUE) {
   out <- function(params) {
     
+    if (missing(params)) {  # for omniscient flow law
+      params <- numeric(0) 
+      gradient <- FALSE
+    }
+    
     swotlist_post <- mcflfun(params)
     Qhat <- swotlist_post$Qhat
     Qobs <- swotlist_post[["Q"]]

@@ -9,7 +9,7 @@ NRMSE <- function (pred, meas)
 
 
 geomMean <- function(x) {
-  exp(mean(log(x)))
+  exp(mean(log(x), na.rm = TRUE))
 }
 
 

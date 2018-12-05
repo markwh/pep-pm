@@ -284,7 +284,7 @@ inputMatrix <- expand.grid(cases, flow_laws, mc_types, metrics, methods,
 resultList <- pmap(.l = inputMatrix,
                    .f = possibly(master_mcflo, otherwise = NA))
 
-cache("resultList")
+# cache("resultList")
 ```
 
 See which failed.
@@ -308,6 +308,27 @@ inputMatrix %>%
 
 ```
 
+get the results
 
+```{r}
+inputMatrix$result <- resultList %>% 
+  map_dbl(possibly(~.$metric, otherwise = NA))
+```
 
+Make a plot!
+
+```{r}
+gg1 <- inputMatrix %>% 
+  na.omit() %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  ggplot(aes(x = method, y = result, color = fl, linetype = mc)) + 
+  geom_line(aes(group = paste0(case, fl, mc), text = case)) + 
+  # scale_linetype_discrete(guide = FALSE) +
+  facet_wrap(~metric)
+  
+
+gg1
+# library(plotly)
+ggplotly(gg1 + theme(legend.position = "none"), tooltip = c("text", "y"))
+```
 

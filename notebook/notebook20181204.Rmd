@@ -1,0 +1,143 @@
+---
+title: "notebook20181204"
+author: "Mark Hagemann"
+date: "December 4, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Going for a plot of optimization results. 
+
+- Compare across flow-laws, mass conservation independently.
+
+```{r}
+cases <- names(reachdata)
+flow_laws <- c("bam_man", "metroman", "omniscient")
+mc_types <- c("bam", "metroman", "omniscient")
+metrics <- c("rrmse", "nrmse")
+methods <- c("stats", "optim")
+
+inputMatrix <- expand.grid(cases, flow_laws, mc_types, metrics, methods, 
+                           stringsAsFactors = FALSE, 
+                           KEEP.OUT.ATTRS = FALSE) %>% 
+  setNames(c("case", "fl", "mc", "metric", "method"))
+
+inputMatrix$result <- resultList %>% 
+  map_dbl(possibly(~.$metric, otherwise = NA))
+```
+
+
+```{r}
+glimpse(inputMatrix)
+
+inputMatrix %>% 
+  filter(metric == "nrmse", fl == "omniscient")
+
+foo <- mcflob(swotlist = reachdata$Connecticut, mc = "bam", fl = "omniscient", ob = "nrmse")
+foo()
+
+
+newresinds <- with(inputMatrix, fl == "omniscient" & metric == "nrmse")
+newres <- inputMatrix[newresinds, c("case", "fl", "mc", "metric", "method")] %>% 
+  pmap(master_mcflo)
+
+resultList[newresinds] <- newres
+
+inputMatrix$result[newresinds] <- map_dbl(newres, ~.$metric)
+
+```
+
+Now re-cache.
+
+```{r}
+summary(inputMatrix)
+
+inputMatrix %>% 
+  filter(is.na(result)) %>% 
+  group_by(case) %>% 
+  summarize(n = n())
+  sample_n(20)
+  
+inputMatrix %>% 
+  filter(case == "Cumberland", metric == "nrmse", method == "optim")
+
+foo <- fl_peek(swotlist = reachdata$Cumberland, fl = "bam_man")
+foo
+
+swotlist <- reachdata$Cumberland
+fl <- "bam_man"
+```
+
+Some others don't work because of NA's that geomMean didn't handle (but I fixed it). 
+
+```{r}
+newresinds2 <- with(inputMatrix, is.na(result) & method == "stats")
+which (newresinds2)
+
+newres2 <- inputMatrix[newresinds2, c("case", "fl", "mc", "metric", "method")] %>% 
+  pmap(master_mcflo)
+
+map_dbl(newres2, ~.$metric)
+
+
+resultList[newresinds2] <- newres2
+
+inputMatrix$result[newresinds2] <- map_dbl(newres2, ~.$metric)
+```
+
+Still need to track down others, but forge ahead with results plotting for now.
+
+Key questions:
+
+- How well does each flow law do on its own? 
+    - What is the effect of optimizing versus statistical truth?
+- How well does each mass-conservation do on its own?
+- How well does each combination of mass-conservation and flow law do?
+
+Start with flow laws, mc = "omniscient"
+
+```{r}
+inputMatrix %>% 
+  filter(mc == "omniscient", fl != "omniscient") %>% 
+  glimpse() %>% 
+  ggplot(aes(x = method, y = result, group = case)) + 
+  geom_point() +
+  geom_line() +
+  facet_grid(metric ~ fl)
+```
+
+
+Now mass-conservation
+
+```{r}
+inputMatrix %>% 
+  filter(mc != "omniscient", fl == "omniscient", method == "stats") %>% 
+  glimpse() %>% 
+  ggplot(aes(x = mc, y = result, group = case)) + 
+  geom_point() +
+  geom_line() +
+  facet_wrap(~metric, nrow = 2)
+```
+
+Now how to combine? Separate plots for stats and optim. 
+
+```{r}
+
+plotdata <- inputMatrix %>% 
+  filter(mc != "omniscient", fl != "omniscient")
+
+summary(plotdata)
+
+   
+ggplot(plotdata, aes(x = fl, y = result)) + 
+  # geom_line() +
+  geom_boxplot(aes(fill = mc)) +
+  geom_point(aes(dodge = mc), position = position_jitterdodge(dodge.width = 0.75)) +
+  facet_grid(metric ~ method)
+
+
+```
+
