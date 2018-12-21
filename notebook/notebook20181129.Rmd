@@ -225,15 +225,17 @@ master_mcflo <- function(case,
                          fl = c("bam_man", "metroman", "omniscient"), 
                          mc = c("bam", "metroman", "omniscient"), 
                          metric = c("rrmse", "nrmse"), 
-                         method = c("stats", "optim")) {
+                         method = c("stats", "optim"),
+                         ...) {
   fl <- match.arg(fl)
   mc <- match.arg(mc)
   metric <- match.arg(metric)
   method <- match.arg(method)
   swotlist <- reachdata[[case]]
   statparams <- fl_peek(swotlist, fl = fl)
-  
-  mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric)
+  # browser()
+  mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
+                  gradient = FALSE)
   res <- list()
   
   if (fl == "omniscient") {
@@ -243,11 +245,27 @@ master_mcflo <- function(case,
     res$metric <- mcflo(statparams)
     res$params <- statparams
   } else if (method == "optim") {
-    resopt <- R.utils::withTimeout(nlm(mcflo, p = statparams, iterlim = 500), 
-                                   timeout = 3600 * 1.5)
+    minA0 <- -apply(swotlist[["dA"]], 1, min, na.rm = TRUE)
+    ns <- length(minA0)
     
-    res$metric <- mcflo(resopt$estimate)
-    res$params <- resopt$estimate
+    ui0 <- matrix(0, nrow = ns, ncol = length(statparams) - ns)
+    ui <- cbind(ui0, diag(1, ns))
+    ci <- log(minA0)
+    wt <- R.utils::withTimeout
+    
+    mcflo_gr <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
+                       gradient = TRUE)
+    gradfun <- function(params) {
+      out <- attr(mcflo_gr(params), "gradient")
+      out
+    }
+    
+    resopt <- wt(constrOptim(theta = statparams, f = mcflo, ui = ui, ci = ci,
+                             grad = gradfun, outer.iterations = 500, ...), 
+                 timeout = 3600 * 1.5)
+    
+    # res$metric <- mcflo(resopt$estimate)
+    # res$params <- resopt$estimate
     res$optim.info <- resopt
   }
   
@@ -255,7 +273,8 @@ master_mcflo <- function(case,
   res
 }
 
-foo <- master_mcflo("Ganges", method = "optim", mc = "omniscient")
+foo <- master_mcflo("Ganges", method = "optim", mc = "omniscient", 
+                    control = list(trace = 3, REPORT = 5))
 
 
 
@@ -281,8 +300,8 @@ inputMatrix <- expand.grid(cases, flow_laws, mc_types, metrics, methods,
                            KEEP.OUT.ATTRS = FALSE) %>% 
   setNames(c("case", "fl", "mc", "metric", "method"))
 
-resultList <- pmap(.l = inputMatrix,
-                   .f = possibly(master_mcflo, otherwise = NA))
+# resultList <- pmap(.l = inputMatrix,
+#                    .f = possibly(master_mcflo, otherwise = NA))
 
 # cache("resultList")
 ```

@@ -1,0 +1,247 @@
+---
+title: "mcflo-results"
+author: "Mark Hagemann"
+date: "December 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Summary, plots of results from mcflo.R. Copied in part from notebooks 20181129, 20181204.
+
+See which mcflo results failed.
+
+```{r}
+resultMatrix %>% 
+  group_by(case, method) %>% 
+  summarize(pct_fail = sum(failed) / n()) %>% 
+  arrange(desc(pct_fail))
+
+resultMatrix %>% 
+  group_by(mc, fl, method) %>%
+  group_by(metric, method) %>%
+  summarize(pct_fail = sum(failed) / n())
+
+```
+
+Plot improvement of optimization over stats-based parameters.
+
+```{r}
+library(plotly)
+gg1 <- resultMatrix %>% 
+  na.omit() %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  ggplot(aes(x = method, y = result, color = fl, linetype = mc)) + 
+  geom_line(aes(group = paste0(case, fl, mc), text = case)) + 
+  # scale_linetype_discrete(guide = FALSE) +
+  facet_wrap(~metric)
+  
+
+gg1
+# library(plotly)
+ggplotly(gg1 + theme(legend.position = "none"), tooltip = c("text", "y"))
+```
+
+
+Key questions:
+
+- How well does each flow law do on its own? 
+    - What is the effect of optimizing versus statistical truth?
+- How well does each mass-conservation do on its own?
+- How well does each combination of mass-conservation and flow law do?
+
+Start with flow laws, mc = "omniscient"
+
+
+```{r}
+resultMatrix %>% 
+  filter(mc == "omniscient", fl != "omniscient") %>% 
+  glimpse() %>% 
+  ggplot(aes(x = method, y = result, group = case)) + 
+  geom_point() +
+  geom_line() +
+  facet_grid(metric ~ fl)
+```
+
+
+Now mass-conservation
+
+```{r}
+resultMatrix %>% 
+  filter(mc != "omniscient", fl == "omniscient", method == "stats") %>% 
+  glimpse() %>% 
+  ggplot(aes(x = mc, y = result, group = case)) + 
+  geom_point() +
+  geom_line() +
+  facet_wrap(~metric, nrow = 2)
+```
+
+
+Now how to combine? Separate plots for stats and optim. 
+
+```{r}
+
+plotdata <- resultMatrix %>%
+  filter()
+  # filter(mc != "omniscient", fl != "omniscient")
+
+plotdata %>% 
+  ggplot(aes(x = fl, y = result)) + 
+  # geom_line() +
+  geom_boxplot(aes(fill = mc), outlier.shape = NA) +
+  geom_point(aes(fill = mc), 
+             shape = 21, alpha = 0.6,
+             position = position_jitterdodge(dodge.width = 0.75, 
+                                             jitter.width = 0.1)) +
+  facet_grid(metric ~ method) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+# log-transformed version
+plotdata %>% 
+  filter(result > 1e-9) %>% # for log scale
+  ggplot(aes(x = fl, y = result)) + 
+  # geom_line() +
+  geom_boxplot(aes(fill = mc), outlier.shape = NA) +
+  geom_point(aes(fill = mc), 
+             shape = 21, alpha = 0.6,
+             position = position_jitterdodge(dodge.width = 0.75, 
+                                             jitter.width = 0.1)) +
+  facet_grid(metric ~ method) +
+  theme_bw() +
+  scale_y_log10(limits = c(0.001, 1)) +
+  annotation_logticks(sides = "l") +
+  theme(legend.position = "bottom")
+```
+
+Table of how many successfully converged
+
+```{r}
+plotdata %>% 
+  filter(!is.na(result)) %>% 
+  group_by(method, metric, mc, fl) %>% 
+  summarize(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  knitr::kable()
+```
+
+
+
+
+Next inspect the difference between "optim" and "stats" parameters.
+
+Since many optimized parameters don't come with parameter names, I'll need to put these in ex-post.
+
+```{r}
+pnamefun <- function(fl, nparams) {
+  if (nparams < 3) return(rep("MISSING", nparams))
+  if (fl == "bam_man") {
+    ns <- nparams - 1
+    pnames <- c("logn", paste0("logA0_", 1:ns))
+  } else if (fl == "metroman") {
+    ns <- nparams / 3
+    pnames <- c(paste0("a_", 1:ns), 
+                paste0("b_", 1:ns),
+                paste0("logA0_", 1:ns))
+  } else {
+    pnames <- NULL
+  }
+  pnames
+}
+
+paramlist <- resultList %>% 
+  map(possibly(~.$params, otherwise = c("MISSING" = NA)))
+
+paramlens <- map_int(paramlist, length)
+
+pnamelist <- map2(resultMatrix$fl[paramlens > 0], paramlens[paramlens > 0],
+                  pnamefun)
+
+paramdfs_tojoin0 <- paramlist[paramlens > 0] %>% 
+  map2(pnamelist, ~data.frame(paramval = .x, 
+                              paramname = .y, stringsAsFactors = FALSE))
+
+
+paramdf_joined <- map2(paramdfs_tojoin0,
+                       split(resultMatrix, f = 1:nrow(resultMatrix))[paramlens > 0],
+                       ~mutate(.x, fl = .y$fl, mc = .y$mc, method = .y$method,
+                               result = .y$result,
+                               metric = .y$metric, case = .y$case)) %>% 
+  bind_rows()
+```
+
+Make the plots
+
+```{r}
+
+# logA0
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("bam_man", "metroman"),
+         metric == "rrmse",
+         grepl("logA0", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, 
+             group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+
+# logn
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("bam_man"),
+         metric == "rrmse",
+         grepl("logn", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, 
+             group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+
+# MetroMan slope
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("metroman"),
+         metric == "rrmse",
+         grepl("^a_", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, 
+             group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+
+# MetroMan intercept
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("metroman"),
+         metric == "rrmse",
+         grepl("^b_", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, 
+             group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+
+```
+
+
+Better to compare A0 in relative terms. 
+
+```{r}
+# logA0
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("bam_man", "metroman"),
+         metric == "rrmse",
+         grepl("logA0", paramname)) %>%
+  select(-result) %>% 
+  spread(key = method, value = paramval) %>% 
+  mutate(pct_chg = (exp(optim) - exp(stats)) / exp(stats) * 100) %>% 
+  # filter(pct_chg < 1000000) %>% 
+  # glimpse()
+  ggplot(aes(x = case, y = abs(pct_chg), 
+             group = paste0(case, paramname))) +
+  geom_point() +
+  facet_grid(mc ~ fl) +
+  scale_y_log10() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+

@@ -1,0 +1,36 @@
+---
+title: "Introduction"
+author: "Mark Hagemann"
+date: "December 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Discharge on the world's major rivers is a fundamental hydrologic quantity, representing the primary means by which terrestrial water is conveyed to, from, and between major stocks of freshwater. While the concept of river discharge--volume of water transported per unit of time--is easy to comprehend, it is difficult to quantify. In-situ stream gages calibrated to manual discharge measurements are the current gold-standard for discharge quantification, but their spatial coverage is limited, especially in sparsely populated areas, and the demands of their maintenance has led to an overall decline in their number over the past several decades. Truly global-scale discharge measurement remains elusive. 
+
+Satellite remote sensing of rivers has long been a complement to in-situ measurements, but so far its utility in quantifying discharge has been limited, particularly in rivers without in-situ gages. Much of this limitation comes from the types of river measurements that have been possible using spaceborne instruments, which historically have included imagery and simple altimetry. 
+
+The upcoming (2021) SWOT satellite will improve greatly upon historic river measurements, and will provide global measurements of river widths, heights, and slopes in all rivers at least 100m wide around the globe. 
+
+In anticipation of this rich dataset, several methods have been developed to estimate discharge using only SWOT measurements of river width, height, and slope, regardless of whether in-situ gages are available. These methods are based on hydraulic equations ("flow laws") that have not previously been applied to this kind of remote-sensed data, and as such their performance was unknown. An intercomparison study using synthetic SWOT-like datasets (Durand et al., 2016) was undertaken to benchmark their performance, revealing reasons for optimism, but also ample room for improvement, as none of the proposed methods achieved target performance. 
+
+As efforts continue to improve upon these performance benchmarks, fundamental questions remain unanswered as to why various methods fell short of the target. Is it inappropriate to apply such flow laws--developed for use at cross-sections in steady-state conditions--to reach-averaged, dynamic-condition measurements that SWOT will provide? Alternatively, do  the methods fail to obtain the correct parameters that govern the otherwise well-suited flow-law equations? Answers to these and related questions are needed in order to contextualize the results of the benchmark study and inform ongoing refinement of discharge estimation methods. 
+
+This study addresses these questions using the same synthetic datasets used in the Durand et al. (2016) intercomparison study. It is intended as a "post-mortem" to the that study, dissecting the datasets and the methods applied to them in order to ascertain the factors contributing to the reported benchmark performance.  While a theory-based approach using open-channel hydraulics and channel geomorphology may be illuminating to the same questions, we opt instead for an empirical, statistical approach based on error decomposition and analysis of variance. By parsing out errors in this way we provide an empirical performance ceiling beyond which flow law-based methods cannot improve, regardless of how they select their parameters.  
+
+
+### More material 
+
+A SWOT discharge algorithm is a function that estimates discharge (\hat{Q}) as a function of SWOT data (\mathbf{x}) and unobserved parameters (\theta):
+
+\hat{Q} = g(\mathbf{x}, \theta)
+
+Operationally, these algorithms will need to "invert" in order to obtain \theta, using only SWOT observables, and existing benchmark studies of their performance have been conducted using such an inversion approach. However, it is difficult to contextualize inversion performance without knowledge of best-achievable performance. Are underwhelming inversions the result of poorly inverted (estimated) parameters, or poorly simulated hydraulics via the physical model? In other words, are inaccuracies in \hat{Q} the fault of g() or (estimated) \theta?
+
+This study seeks the long-outstanding goal of explicitly characterizing the best achievable performance (BAP) of the models underpinning SWOT discharge algorithms. The algorithms are broken down into their component parts (a flow law and a mass-conservation constraint), and, using additional data available to the benchmark datasets (but not in a true SWOT dataset), the best parameters are determined. 
+

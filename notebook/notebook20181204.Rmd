@@ -134,10 +134,144 @@ summary(plotdata)
    
 ggplot(plotdata, aes(x = fl, y = result)) + 
   # geom_line() +
-  geom_boxplot(aes(fill = mc)) +
-  geom_point(aes(dodge = mc), position = position_jitterdodge(dodge.width = 0.75)) +
+  geom_boxplot(aes(fill = mc), outlier.shape = NA) +
+  geom_point(aes(fill = mc), 
+             shape = 21, alpha = 0.6,
+             position = position_jitterdodge(dodge.width = 0.75, 
+                                             jitter.width = 0.2)) +
   facet_grid(metric ~ method)
 
 
+
 ```
+
+Next inspect the difference between "optim" and "stats" parameters.
+
+Since many optimized parameters don't come with parameter names, I'll need to put these in ex-post.
+
+```{r}
+pnamefun <- function(fl, nparams) {
+  if (nparams < 3) return(rep("MISSING", nparams))
+  if (fl == "bam_man") {
+    ns <- nparams - 1
+    pnames <- c("logn", paste0("logA0_", 1:ns))
+  } else if (fl == "metroman") {
+    ns <- nparams / 3
+    pnames <- c(paste0("a_", 1:ns), 
+                paste0("b_", 1:ns),
+                paste0("logA0_", 1:ns))
+  } else {
+    pnames <- NULL
+  }
+  pnames
+}
+```
+
+
+```{r}
+paramlist <- resultList %>% 
+  map(possibly(~.$params, otherwise = c("MISSING" = NA)))
+
+paramlens <- map_int(paramlist, length)
+
+pnamelist <- map2(inputMatrix$fl[paramlens > 0], paramlens[paramlens > 0],
+                  pnamefun)
+
+paramdfs_tojoin0 <- paramlist[paramlens > 0] %>% 
+  map2(pnamelist, ~data.frame(paramval = .x, 
+                              paramname = .y, stringsAsFactors = FALSE))
+
+
+paramdf_joined <- map2(paramdfs_tojoin0,
+                       split(inputMatrix, f = 1:nrow(inputMatrix))[paramlens > 0],
+                       ~mutate(.x, fl = .y$fl, mc = .y$mc, method = .y$method,
+                               result = .y$result,
+                               metric = .y$metric, case = .y$case)) %>% 
+  bind_rows()
+
+
+```
+
+Can I plot it now?
+
+```{r}
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  glimpse() %>% 
+  filter(fl %in% c("bam_man", "metroman"),
+         metric == "rrmse",
+         grepl("logA0", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+
+paramdf_joined %>% 
+  filter(method == "optim", fl == "metroman", mc == "bam", metric == "rrmse",
+         grepl("logA0", paramname),
+         case == "MississippiUpstream")
+
+
+```
+
+Do the same for logn, a, b.
+
+```{r}
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("bam_man"),
+         metric == "rrmse",
+         grepl("logn", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("metroman"),
+         metric == "rrmse",
+         grepl("^a_", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  filter(fl %in% c("metroman"),
+         metric == "rrmse",
+         grepl("^b_", paramname)) %>% 
+  ggplot(aes(x = method, y = paramval, color = case, group = paste0(case, paramname))) +
+  geom_line(position = position_dodge()) +
+  facet_grid(mc ~ fl)
+```
+
+
+
+A curious case is Metroman (flow-law), BAM (mass-conservation) for MississippiUpstream. 
+
+```{r}
+paramdf_joined %>% 
+  glimpse() %>% 
+  filter(fl == "metroman", mc == "bam", case == "MississippiUpstream", metric == "rrmse",
+         grepl("logA0", paramname))
+
+whichone <- inputMatrix %>% 
+  mutate(thisone = (fl == "metroman" & mc == "bam" & case == "MississippiUpstream" & 
+                      metric == "rrmse" & method == "optim")) %>% 
+  glimpse()
+
+which(whichone$thisone)
+resultList[[which(whichone$thisone)]]
+
+```
+
+
+This seems like a good place to stop for now. Time for some writing.
+
+```{r}
+
+msus1 <- with(inputMatrix[369, ], 
+              master_mcflo(case = case, fl = fl, mc = mc, 
+                           metric = metric, method = method))
+```
+
 

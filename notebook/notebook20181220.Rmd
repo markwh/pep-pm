@@ -1,0 +1,16 @@
+---
+title: "notebook20181220"
+author: "Mark Hagemann"
+date: "December 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Today I'm tying up loose ends. Writing. Start by updating the 3-paragraph outline from the writing-science exercise. Then summarize main results. Discussion will require some thinking, but that's something I can work on today. Need to get this presented so that I can move on to inversion theory.
+
+Still need to finalize results. I wish I knew why these take so long to compute. Must be something to do with matrix multiplication time. TODO: switch to Matrix:: implementations. 
+
+First priority is transferring results computation from notebook to script and properly caching the final result. 

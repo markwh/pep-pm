@@ -136,10 +136,20 @@ $$
 
 ## Mass conservation
 
+### Omnisicent (baseline case)
+
+Similar to the omniscient flow law, the omniscient mass conservation simply returns the flow-law predicted discharge without modification.
+
+$$
+\tilde{Q}_{st} = \hat{Q}_{st}
+$$
+
+The Jacobian for the omniscient mass-conservation is simply the identity matrix, with dimensions given by the number of parameters used by the flow law.
+
 ### Mean
 
 $$
-\tilde{Q}_{st} = \tilde{Q}_t = \frac{1}{N_s}\sum_{s'=1}^{N_s} \hat{Q}_{s't})
+\tilde{Q}_{st} = \tilde{Q}_t = \frac{1}{N_s}\sum_{s'=1}^{N_s} \hat{Q}_{s't}
 $$
 
 **Jacobian**

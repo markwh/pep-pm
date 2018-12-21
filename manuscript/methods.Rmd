@@ -1,0 +1,209 @@
+---
+title: "Methods"
+author: "Mark Hagemann"
+date: "December 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Methods
+
+The best-achievable performance of a discharge algorithm is given by an optimal set of parameters. There are at least two interpretations of this. One uses a physical and statistical interpretation to obtain "true" parameters from SWOT and ancillary data (including true discharge and channel geometry). A second explicitly sets up an optimization problem using a pefrormance meteric calculated from true and predicted discharge. 
+
+This section begins by introducing important notation, followed by a description of the benchmark datasets. The two appraoches (physical/statistical and optimization) for obtaining the best flow-law parameters are then presented, with individual variants described in detail. 
+
+
+### Datasets
+
+```{r, eval = FALSE}
+reachdata %>% 
+  map_int(~nrow(.$W)) %>%
+  summary()
+
+reachdata %>% 
+  map_int(~ncol(.$W)) %>%
+  summary()
+```
+
+
+19 benchmark datastes used in Durand et al. (2016) were used to characterize algorithm performance. Each dataset is the output from a 2-D hydrodynamic model forced with in-situ channel bathymetry and gaged stage and discharge. The simulation outputs are assembled into reach-averaged "observations" of river width, height, and slope, as well as true cross-sectional area and discharge. The number of locations (reaches) per case varied from 3 to 16, with a median of 5, and the number of times varied from 23 to 367, with a median of 162.
+
+### The components of McFLI discharge algorithms, notation
+
+SWOT discharge algorithms seek to predict discharge in a river using measurements of height, width, and slope. These quantities--including discharge--vary in both space (here indexed by the subscript $s$) and time (indexed by the subscript $t$). Generally, two physical constraints are employed to form the algorithm, although the specifics vary from one algorithm to another. The first is a "flow law", an analytical representation of simplified open-channel hydraulics. The second is mass-conservation within a series of SWOT reaches. The resulting mass-conserved flow law can written as a composition of two functions--a mass-conservation function applied to a flow-law function--as follows:
+
+$$
+\hat{Q}_{st} = g_{mcfl}(\theta) = g_{mc}(g_{fl}(\theta, \mathbf{x}_{st}))
+$$
+
+where:
+
+- $\hat{Q}_{st}$ is predicted discharge for location $s$ and time $t$
+- $g_{mcfl}$ is the composed mass-conserved flow law function
+- $g_{mc}$ is the mass-conservation function
+- $g_{fl}$ is the flow-law
+- $\theta$ is a vector of flow-law parameters
+- $\mathbf{x}_{st}$ is a list of SWOT observations for a particular river case at location $s$ and time $t$.
+
+The performance of a particular discharge algorithm is characterized by a performance metric, which is a function of true and predicted discharge over all $N_s$ locations and $N_t$ times. If $\mathbf{x}$ is augmented to include true discharge (and this information is propogated through the mc and fl functions), then we can write the performance metric for a particular SWOT case, flow law, mass-conservation method, and parameter set, as a further composition:
+
+$$
+g^*(\theta) = g_{pm}(g_{mc}(g_{fl}(\theta, \mathbf{x})))
+$$
+
+This general form for mass-conserved flow law performance as a function of parameters and data is readily optimized, providing (1) optimal flow-law parameters for each SWOT case, and (2) best-case performance for a particular mass-conserved flow law, constituting a baseline to which discharge inversion algorithms may be compared. Optimization of equation #### is facilitated by determining its gradient, which is also readily composed from the first derivatives of the individual constituent functions:
+
+$$
+\nabla g^*(\theta) = \mathbf{J}_{fl}\mathbf{J}_{mc}\nabla g_{pm}(\theta)
+$$
+
+where $\mathbf{J}$ is the Jacobian matrix of the function indicated in the subscript. Specifics of these Jacobians and gradients are provided in the appendix.
+
+Two variants each of flow law, mass-conservation method, and performance metric are described in detail below, representing methods previously applied to the benchmark cases as inversions with documented performance. A third "omniscient" variant of flow law and mass conservation is added as a trivial case in order to elucidate the contribution of flow-law and mass-conservation error to overall algorithm performance.
+
+### Flow laws
+
+Manning's equation provides the mathematical basis for most of the proposed SWOT discharge estimation methods, including the two variants considered here. This formula calculates discharge (Q) using measurements of river cross-sectional area (A), slope (S), and width (W). It further has a single unmeasured parameter (n), related to stream bed roughness, that quantifies resistance to flow. 
+
+Q = \frac{1}{n}W^{-2/3}A^{5/3}S^{1/2}
+
+In order to be applied to SWOT measurements, several modifications need to be made. First, because only changes in A are measured (calculated from height and width measurements), and not A itself, the equation receives an additional parameter (A_0), representing the true cross-sectional area at any single point in time. The measured changes in A are denoted \delta A, so that A = A_0 + \delta A. The SWOT-modified Manning's equation then becomes 
+
+Q = \frac{1}{n}W^{-2/3}(A_0 + \delta A)^{5/3}S^{1/2}
+
+Two specific variants of the SWOT-modified Manning equation are discussed below, as well as a trivial "omniscient" flow law applicable only for testing purposes. Jacobian matrices for these flow laws are described in the appendix.
+
+
+#### Omniscient (baseline case)
+
+A strictly hypothetical "omniscient" flow law simply returns the true discharge. This function has no parameters. The function has the form:
+
+$$
+\hat{Q}_{st} = Q_{st}
+$$
+
+where $Q$ (without the hat) represents true discharge.
+
+#### Manning (constant n)
+
+The constant-n Manning equation uses the same value of $n$ across all locations and times. It has the following form:
+
+$$
+\hat{Q}_{st} = \frac{1}{n}W_{st}^{-2/3}(A_{0,s} + \delta A_{st})^{5/3}S_{st}^{1/2}
+$$
+
+- Manning parameters are $A_{0,s}, s = 1, \dots , N_s$ and $n$
+- For numerical stability in optimizing, it is preferable to use $\log A_{0,s}$ and $\log n$. 
+
+#### MetroMan, depth-varying flow resistance
+
+The depth-variable Manning equation is more complex, as it allows $n$ to vary in space and time, according to a location-specific power-law relationship with river depth (calculated as the ratio of cross-sectoinal area to width). This flow law has the following form:
+
+$$
+\hat{Q}_{st} = \frac{1}{n_{st}}W_{st}^{-2/3}(A_{0,s} + \delta A_{st})^{5/3}S_{st}^{1/2}, \\
+\log n_{st} = a + b \log (A_{st} / W_{st})
+$$
+
+- Manning parameters are $\log A_{0,s}, s = 1, \dots , N_s$, $a$, and $b$.
+
+### Mass conservation
+ 
+We shall use a tilde ($\tilde{Q}$) to distinguish mass-conserved discharge estimates from flow-law-only estimates (prior to mass conservation), which are denoted by the hat ($\hat{Q}$).
+
+#### Omnisicent (baseline case)
+
+Similar to the omniscient flow law, the omniscient mass conservation simply returns the flow-law predicted discharge without modification.
+
+$$
+\tilde{Q}_{st} = \hat{Q}_{st}
+$$
+
+The Jacobian for the omniscient mass-conservation is simply the identity matrix, with dimensions given by the number of parameters used by the flow law.
+
+#### Mean
+
+$$
+\tilde{Q}_{st} = \tilde{Q}_t = \frac{1}{N_s}\sum_{s'=1}^{N_s} \hat{Q}_{s't}
+$$
+
+#### BAM (geometric mean)
+
+$$
+\tilde{Q}_{st} = \tilde{Q}_t = \exp(\frac{1}{N_s}\sum_{s'=1}^{N_s}\log \hat{Q}_{s't})
+$$
+
+
+#### MetroMan (non-steady-state Q)
+
+The MetroMan method of mass-conservation amounts to an adjustment of steady-state Q using information from (estimated) cross-sectional area. This adjustment comes from the instantaneous continuity relationship:
+
+$$
+\frac{\partial Q}{\partial x} = -\frac{\partial A}{\partial t}
+$$
+
+With sufficient temporal resolution, we can approximate this using a finite difference on an estimate of $A$:
+
+$$
+\Delta Q = \frac{\Delta \hat{A}}{\Delta t} \Delta x
+$$
+
+where $\hat{A}_{st} = \hat{A}_{0,s} + \delta A_{st}$ and $\Delta x$ is the cumulative along-stream distance between reaches (i.e. the downstream distance of a reach referenced to a single point), with the $\Delta x = 0$ location chosen such that the mean of $\Delta Q$ is zero. 
+
+The total mass-conserved discharge estimate is then
+
+$$
+\tilde{Q}_{st} = \tilde{Q}^*_{st} + \Delta Q_{st}
+$$
+
+where $\tilde{Q}^*_{st}$ is the steady-state mass-conserved discharge estimate, using the mean method described above. 
+
+
+### Performanc metric
+
+Two commnoly used performance metrics, both variants of root-mean-square error (RMSE) are considered here: relative RMSE (rRMSE) and normalized RMSE (nRMSE). 
+
+#### rRMSE
+
+$$
+\begin{aligned}
+rRMSE(\tilde{Q}, Q) &= \sqrt{ \frac{1}{N_s N_{t}} \sum_{s,t} \Bigg( \frac{\tilde{Q}_{st} - Q_{st}}{Q_{st}} \Bigg)^2} \\
+&= \Big(\frac{\mathbf{r_r^T r_r}}{N_sN_t}\Big)^{1/2}
+\end{aligned}
+$$
+
+where $\mathbf{r_r}$ denotes the length-$N_s N_t$ vector of relative residuals. 
+
+#### nRMSE
+
+$$
+\begin{aligned}
+nRMSE(\tilde{Q}, Q) &= \frac{1}{\bar{Q}}\sqrt{ \frac{1}{N_s N_{t}} \sum_{s,t} (\tilde{Q}_{st} - Q_{st})^2 } \\
+&= \frac{1}{\bar{Q}} \Big(\frac{\mathbf{r^T r}}{N_sN_t}\Big)^{1/2}
+\end{aligned}
+$$
+
+where $\mathbf{r}$ denotes the length-$N_s N_t$ vector of residuals, and $\bar{Q}$ is the arithmetic mean (over all $s$ and $t$) of true discharge. 
+
+### Statistical (non-optimization) approach
+
+While the parameters selected by the optimization described above are optimal in that they minimize the performance metric, they are not necessarily the "truest" parameters. A second approach using physical and statistical interpretations of parameters was therefore used for comparison to the optimization approach. 
+
+True $A_0$ is computed from the true cross-sectional area for each location as the minimum of each location's time series of cross-sectoinal area:
+
+$$
+A_{0, s} = \min_t A_{st}
+$$
+
+Assuming no error in approximating $\delta A$ from $H$ and $W$ (which is the case for the synthetic benchmark cases), this is a "true" value of $A_0$ in that $A_{0,s} + \delta A_{st} = A_{st}$
+
+Manning's n is computed from the "closure" term obtained from solving Manning's equation for n using true discharge and cross-sectional area:
+
+$$
+n_{st} = Q_{st}^{\space} W_{st}^{2/3}A_{st}^{-5/3}S_{st}^{-1/2}
+$$
+
+Constant-n Manning takes the geometric mean of $n_st$ over space and time as the statistically true parameter, while depth-variable (MetroMan) Manning performs a least-squares regression to obtain $a$ and $b$ in the equation $\log n_{st} = a + b \log (A_{st} / W_{st})$.
+
