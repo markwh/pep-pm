@@ -182,9 +182,10 @@ paramdf_joined %>%
   filter(fl %in% c("bam_man", "metroman"),
          metric == "rrmse",
          grepl("logA0", paramname)) %>% 
-  ggplot(aes(x = method, y = paramval, color = case, 
+  ggplot(aes(x = method, y = paramval)) +
+  geom_line(aes(color = case, 
              group = paste0(case, paramname))) +
-  geom_line(position = position_dodge()) +
+  geom_violin(fill = NA) +
   facet_grid(mc ~ fl)
 
 # logn
@@ -221,6 +222,26 @@ paramdf_joined %>%
   facet_grid(mc ~ fl)
 
 ```
+
+
+Try combining all these
+
+```{r, fig.width=6, fig.height=7.5}
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim")),
+         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
+         flparam = paste(shortparam, fl, sep = "_")) %>% 
+  filter(fl %in% c("bam_man", "metroman"),
+         metric == "rrmse", paramname != "MISSING") %>% 
+  ggplot(aes(x = method, y = paramval)) +
+  geom_line(aes(color = case, 
+             group = paste0(case, paramname))) +
+  geom_violin(fill = NA) +
+  facet_grid(flparam ~ mc, scales = "free") + 
+  theme(legend.position = "right")
+
+```
+
 
 
 Better to compare A0 in relative terms. 

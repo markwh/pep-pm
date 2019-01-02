@@ -95,3 +95,5 @@ resultMatrix <- within(inputMatrix, {
   failed = failureVec
   })
 
+cache("resultMatrix")
+

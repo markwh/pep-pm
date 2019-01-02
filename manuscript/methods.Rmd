@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The best-achievable performance of a discharge algorithm is given by an optimal set of parameters. There are at least two interpretations of this. One uses a physical and statistical interpretation to obtain "true" parameters from SWOT and ancillary data (including true discharge and channel geometry). A second explicitly sets up an optimization problem using a pefrormance meteric calculated from true and predicted discharge. 
 
-This section begins by introducing important notation, followed by a description of the benchmark datasets. The two appraoches (physical/statistical and optimization) for obtaining the best flow-law parameters are then presented, with individual variants described in detail. 
+This section proceeds by introducing important notation, followed by a description of the benchmark datasets. The two appraoches (physical/statistical and optimization) for obtaining the best flow-law parameters are then presented, with individual variants described in detail. 
 
 
 ### Datasets
@@ -29,14 +29,14 @@ reachdata %>%
 ```
 
 
-19 benchmark datastes used in Durand et al. (2016) were used to characterize algorithm performance. Each dataset is the output from a 2-D hydrodynamic model forced with in-situ channel bathymetry and gaged stage and discharge. The simulation outputs are assembled into reach-averaged "observations" of river width, height, and slope, as well as true cross-sectional area and discharge. The number of locations (reaches) per case varied from 3 to 16, with a median of 5, and the number of times varied from 23 to 367, with a median of 162.
+19 benchmark datastes used in Durand et al. (2016) were used to characterize algorithm performance. Each dataset is generated using the output from a 2-D hydrodynamic model forced with in-situ channel bathymetry and gaged stage and discharge. The simulation outputs were assembled into reach-averaged "observations" of river width, height, and slope, as well as true cross-sectional area and discharge. The number of locations (reaches) per case varied from 3 to 16, with a median of 5, and the number of times varied from 23 to 367, with a median of 162.
 
 ### The components of McFLI discharge algorithms, notation
 
 SWOT discharge algorithms seek to predict discharge in a river using measurements of height, width, and slope. These quantities--including discharge--vary in both space (here indexed by the subscript $s$) and time (indexed by the subscript $t$). Generally, two physical constraints are employed to form the algorithm, although the specifics vary from one algorithm to another. The first is a "flow law", an analytical representation of simplified open-channel hydraulics. The second is mass-conservation within a series of SWOT reaches. The resulting mass-conserved flow law can written as a composition of two functions--a mass-conservation function applied to a flow-law function--as follows:
 
 $$
-\hat{Q}_{st} = g_{mcfl}(\theta) = g_{mc}(g_{fl}(\theta, \mathbf{x}_{st}))
+\hat{Q}_{st} = g_{mcfl}(\theta, \mathbf{x}_{st}) = g_{mc}(g_{fl}(\theta, \mathbf{x}_{st}))
 $$
 
 where:
@@ -46,12 +46,12 @@ where:
 - $g_{mc}$ is the mass-conservation function
 - $g_{fl}$ is the flow-law
 - $\theta$ is a vector of flow-law parameters
-- $\mathbf{x}_{st}$ is a list of SWOT observations for a particular river case at location $s$ and time $t$.
+- $\mathbf{x}_{st}$ is a list of SWOT observations for a particular river case at location $s$ and time $t$. Since $\mathbf{x}$ is fixed for a given dataset, we omit it for simplicity in the the equations below (for example, $g_{fl}(\theta) = g_{fl}(\theta, \mathbf{x}_{st})$)
 
 The performance of a particular discharge algorithm is characterized by a performance metric, which is a function of true and predicted discharge over all $N_s$ locations and $N_t$ times. If $\mathbf{x}$ is augmented to include true discharge (and this information is propogated through the mc and fl functions), then we can write the performance metric for a particular SWOT case, flow law, mass-conservation method, and parameter set, as a further composition:
 
 $$
-g^*(\theta) = g_{pm}(g_{mc}(g_{fl}(\theta, \mathbf{x})))
+g^*(\theta) = g_{pm}(g_{mc}(g_{fl}(\theta)))
 $$
 
 This general form for mass-conserved flow law performance as a function of parameters and data is readily optimized, providing (1) optimal flow-law parameters for each SWOT case, and (2) best-case performance for a particular mass-conserved flow law, constituting a baseline to which discharge inversion algorithms may be compared. Optimization of equation #### is facilitated by determining its gradient, which is also readily composed from the first derivatives of the individual constituent functions:
@@ -62,17 +62,21 @@ $$
 
 where $\mathbf{J}$ is the Jacobian matrix of the function indicated in the subscript. Specifics of these Jacobians and gradients are provided in the appendix.
 
-Two variants each of flow law, mass-conservation method, and performance metric are described in detail below, representing methods previously applied to the benchmark cases as inversions with documented performance. A third "omniscient" variant of flow law and mass conservation is added as a trivial case in order to elucidate the contribution of flow-law and mass-conservation error to overall algorithm performance.
+Two variants each of flow law, mass-conservation method, and performance metric are described in detail below, representing methods previously applied to the benchmark cases as inversions with documented performance. A third "omniscient" variant of flow law and mass conservation is added as a trivial case in order to parse out the contribution of flow-law and mass-conservation error to overall algorithm performance.
 
 ### Flow laws
 
 Manning's equation provides the mathematical basis for most of the proposed SWOT discharge estimation methods, including the two variants considered here. This formula calculates discharge (Q) using measurements of river cross-sectional area (A), slope (S), and width (W). It further has a single unmeasured parameter (n), related to stream bed roughness, that quantifies resistance to flow. 
 
+$$
 Q = \frac{1}{n}W^{-2/3}A^{5/3}S^{1/2}
+$$
 
-In order to be applied to SWOT measurements, several modifications need to be made. First, because only changes in A are measured (calculated from height and width measurements), and not A itself, the equation receives an additional parameter (A_0), representing the true cross-sectional area at any single point in time. The measured changes in A are denoted \delta A, so that A = A_0 + \delta A. The SWOT-modified Manning's equation then becomes 
+In order to be applied to SWOT measurements, several modifications need to be made. First, because only changes in A are measured (calculated from height and width measurements), and not A itself, the equation receives an additional parameter (A_0), representing the true cross-sectional area at any single point in time. The measured changes in A are denoted $\delta A$, so that $A = A_0 + \delta A$. The SWOT-modified Manning's equation then becomes 
 
+$$
 Q = \frac{1}{n}W^{-2/3}(A_0 + \delta A)^{5/3}S^{1/2}
+$$
 
 Two specific variants of the SWOT-modified Manning equation are discussed below, as well as a trivial "omniscient" flow law applicable only for testing purposes. Jacobian matrices for these flow laws are described in the appendix.
 
@@ -191,7 +195,7 @@ where $\mathbf{r}$ denotes the length-$N_s N_t$ vector of residuals, and $\bar{Q
 
 While the parameters selected by the optimization described above are optimal in that they minimize the performance metric, they are not necessarily the "truest" parameters. A second approach using physical and statistical interpretations of parameters was therefore used for comparison to the optimization approach. 
 
-True $A_0$ is computed from the true cross-sectional area for each location as the minimum of each location's time series of cross-sectoinal area:
+True $A_0$ is computed from the true cross-sectional area for each location as the minimum of each location's time series of cross-sectional area:
 
 $$
 A_{0, s} = \min_t A_{st}
