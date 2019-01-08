@@ -29,10 +29,14 @@ fl <- function(swotlist,
 fl_bamman <- function(swotlist) {
   logW <- log(swotlist$W)
   logS <- log(swotlist$S)
+  # browser()
+  sum(is.na(logS))
+  # print(min(logS))
   dA <- swotlist$dA
 
     
   out <- function(params) {
+    # browser()
     logn <- params[1]
     A0_med <- exp(params[-1])
     Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
@@ -82,6 +86,7 @@ fl_mm <- function(swotlist) {
     logA0 <- params[-1:(-2 * ns)]
     A0_med <- exp(logA0)
     Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
+    # print(min(Amat))
     logA <- log(Amat)
     logD <- logA - logW
     logn <- swot_vec2mat(a, logW) + bmat * logD

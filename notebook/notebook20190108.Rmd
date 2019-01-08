@@ -1,0 +1,30 @@
+---
+title: "notebook20190108"
+author: "Mark Hagemann"
+date: "January 8, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Since optimizations are going very slow, I thought I'd try out microbenchmark on the objective and gradient. 
+
+```{r}
+library(microbenchmark)
+
+foo <- mcflo_inps(swotlist = reachdata$SacramentoUpstream, fl = "metroman", 
+                  mc = "metroman", metric = "nrmse")
+
+f1 <- foo$f
+g1 <- foo$g
+args <- foo$p_init
+
+
+microbenchmark(f1(args), g1(args))
+
+```
+
+
+

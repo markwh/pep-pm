@@ -1,0 +1,147 @@
+---
+title: "notebook20190103"
+author: "Mark Hagemann"
+date: "January 3, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I'm going to spend some time this afternoon getting to the bottom of my slow optimization issues. The [CRAN optimization task view](https://cran.r-project.org/web/views/Optimization.html) lists several packages that may suit my needs. The lbfgsb3c package appears to be fast (uses RCpp), but precious little documentation is online. I've already installed it. Let's check it out.
+
+```{r}
+library("lbfgsb3c")
+
+ls("package:lbfgsb3c")
+```
+
+It only contains a single function, with the same name as the package! How quaint! JK, that's exactly how it should be, in this case.
+
+```{r}
+?lbfgsb3c
+```
+
+Now I'll make a wrapper function that takes the same arguments as `master_mcflo()` and do a side-by-side comparison.
+
+```{r}
+dput(master_mcflo)
+mmcflo2 <- function(case, fl = c("bam_man", "metroman", "omniscient"), 
+    mc = c("bam", "metroman", "omniscient"), metric = c("rrmse", 
+        "nrmse"), method = c("stats", "optim"), msg = NA,
+    startparams = NULL,
+    timeout = 3600,
+    ...) {
+  
+    if (!is.na(msg)) {
+      cat(msg, " ")
+    }
+  
+    fl <- match.arg(fl)
+    mc <- match.arg(mc)
+    metric <- match.arg(metric)
+    method <- match.arg(method)
+    swotlist <- reachdata[[case]]
+    ndat1 <- nrow(swotlist$W) * ncol(swotlist$W)
+    swotlist <- swot_purge_nas(swotlist)
+    swotlist$dA <- rezero_dA(swotlist$dA)
+    ndat2 <- nrow(swotlist$W) * ncol(swotlist$W)
+    if (ndat2 < ndat1) {
+      message(sprintf("Purged %.1f percent of data", (1 - ndat2 / ndat1) * 100))
+    }
+    statparams <- fl_peek(swotlist, fl = fl)
+    if (is.null(startparams)) startparams <- statparams
+    mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
+        gradient = FALSE)
+    res <- list()
+    if (fl == "omniscient") {
+        res$metric <- mcflo()
+        res$params <- numeric()
+    }
+    else if (method == "stats") {
+        res$metric <- mcflo(statparams)
+        res$params <- statparams
+    }
+    else if (method == "optim") {
+        minA0 <- -apply(swotlist[["dA"]], 1, min, na.rm = TRUE) + 0.1 # include a tolerance
+        # cat("minA0:", minA0, "\n")
+        # cat("min_logA0:", log(minA0))
+        ns <- length(minA0)
+        mins0 <- rep(-Inf, length(statparams) - ns)
+        mins <- c(mins0, log(minA0))
+        wt <- R.utils::withTimeout
+        mcflo_gr <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
+            gradient = TRUE)
+        gradfun <- function(params) {
+            out <- attr(mcflo_gr(params), "gradient")
+            out
+        }
+        # dput(statparams)
+        # return(gradfun)
+        
+        resopt <- wt(lbfgsb3c(par = startparams, fn = mcflo, gr = gradfun, 
+                              lower = mins, ...),
+                     timeout = timeout)
+
+        res$metric <- mcflo(resopt$par)
+        res$params <- resopt$par
+        res$optim.info <- resopt
+    }
+    res$call <- sys.call()
+    res
+}
+
+
+```
+
+Test it out.
+
+```{r}
+inputMatrix %>% 
+  mutate(rownum = 1:nrow(.)) %>% 
+  filter(method == "optim")
+```
+
+```{r}
+foo <- with(inputMatrix[344, ], 
+            mmcflo2(case = case, fl = fl, mc = mc, 
+                    metric = metric, method = method))
+foo$optim.info
+testpars <- foo$params
+
+bar <- with(inputMatrix[344, ], 
+            mmcflo2(case = case, fl = fl, mc = mc, 
+                    metric = metric, method = method))
+
+statparams <- c(logn = -3.47255776507594, logA0_1 = 7.17918219940018, 
+                logA0_2 = 7.21070304799495, logA0_3 = 7.25197102849981, 
+                logA0_4 = 7.29222357203567)
+bar(testpars)
+bar(statparams)
+```
+
+So gradient is NA even at initialization. This will take some digging. 
+
+```{r}
+
+
+foo <- mc(fl(reachdata$Cumberland, method = "bam_man"), method = "bam")
+sum(!is.na(attr(foo(statparams), "gradient")))
+```
+
+OK, this is an issue of NA's in the observed data. Easiest way is to purge, but see how much this affects things. 
+
+```{r}
+foo <- with(inputMatrix[344, ], 
+            mmcflo2(case = case, fl = fl, mc = mc, 
+                    metric = metric, method = method))
+
+bar <- with(inputMatrix[344, ], 
+            master_mcflo(case = case, fl = fl, mc = mc, 
+                    metric = metric, method = method))
+
+
+```
+
+It's entirely possible that the original version was not actually slow, and that it's the stupid NA issue. 

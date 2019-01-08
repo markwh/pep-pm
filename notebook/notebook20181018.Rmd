@@ -78,6 +78,65 @@ all.equal(qhat_1n, qhat_nmm)
 I'm satisfied with that. Now what can I accomplish with optimization?
 
 ```{r}
+# Function factories for optimizing based on various fit stats
+
+#' @param evalfun A function returning an evaluation metric to be minimized. 
+#'   Must be a function of (pred, meas). 
+evalff <- function(swotlist, evalfun = RRMSE,
+                  area = c("optim", "stat", "true"), 
+                  man_n = c("single", "spatial", "metroman"),
+                  qagfun = geomMean) {
+  
+  area <- match.arg(area)
+  man_n <- match.arg(man_n)
+  swotlist$dA <- rezero_dA(swotlist$dA, "median")
+  
+  # params is a vector of length nx + 1, with the first element 
+  Qmeas <- apply(swotlist$Q, 2, qagfun)
+  
+  out <- function(params) {
+    stopifnot(is.numeric(params))
+    
+    if (man_n == "single") {
+      n100 <- params[1]
+      n <- n100 / 100 # This scaling to keep param on par with A0
+      n_n <- 1
+      nmat <- matrix(n, nrow = nrow(swotlist$W), ncol = ncol(swotlist$W))
+    } else if (man_n == "spatial") {
+      n_n <- nrow(swotlist$W)
+      n100 <- params[1:n_n]
+      n <- n100 / 100
+      nmat <- swot_vec2mat(n, swotlist$W)
+    } else if (man_n == "metroman") {
+      # log(n) = a + b * log(d) = a + b * log(A / W)
+      nx <- nrow(swotlist$W)
+      logd <- log(swotlist$A) - log(swotlist$W)
+      a <- params[1:nx]
+      b <- params[nx + (1:nx)]
+      nmat <- exp(a + b * logd)
+    }
+    
+    if (area == "optim") {
+      A0.001 <- params[-1:-n_n]
+      A0 <- A0.001 * 1000 # Scale to keep on par with n.
+      dA <- swotlist[["dA"]]
+      Amat <- swot_vec2mat(A0, dA) + dA
+    } else if (area == "stat") {
+      A0 <- apply(swotlist$A, 1, median, na.rm = TRUE)
+      dA <- swotlist[["dA"]]
+      Amat <- swot_vec2mat(A0, dA) + dA
+    } else if (area == "true") {
+      Amat <- swotlist[["A"]]
+    }
+    
+    Qpredmat <- nmat^(-1) * Amat^(5/3) * swotlist$W^(-2/3) * swotlist$S^(1/2)
+    Qpred <- apply(Qpredmat, 2, qagfun)
+    
+    out <- evalfun(Qpred, Qmeas)
+    out
+  }
+}
+
 ffs_1n <- map(reachdata, ~evalff(., man_n = "single"))
 
 startn <- lapply(seq_along(ffs_1n), function(x) 0.005)

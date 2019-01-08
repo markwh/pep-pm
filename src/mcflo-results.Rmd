@@ -6,8 +6,17 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+opts_chunk$set(echo = TRUE)
+opts_knit$set(root.dir = "../")
 ```
+
+```{r}
+library(ProjectTemplate)
+load.project()
+set.seed(4128)
+```
+
 
 Summary, plots of results from mcflo.R. Copied in part from notebooks 20181129, 20181204.
 
@@ -263,6 +272,7 @@ paramdf_joined %>%
   geom_point() +
   facet_grid(mc ~ fl) +
   scale_y_log10() +
-  theme(axis.text.x = element_text(angle = 90))
+  theme(axis.text.x = element_text(angle = 90)) +
+  ylab("% difference (abs. val.)")
 ```
 

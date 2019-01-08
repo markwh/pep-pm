@@ -9,4 +9,33 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+What is the overall idea--do McFl methods work, as evaluated by performance metrics?
+
+- summary statistics: max, median, min RRMSE, NRMSE for non-omniscient methods (4 mcfl methods x 2 metrics)
+
+Is either one or the other responsible for poor McFLI performance? 
+
+Evaluation of individual fl methods
+
+- summary stats for omniscient flow law
+
+Evaluation of individual mc methods
+
+- summary stats for omniscient mass cons.
+
+Comment on differences between metrics
+
+Convergence issues
+
+- Cases, metrics that failed to converge
+- diagnostics, interpretation
+
+Relative performance of "stats" method
+
+- Differences in optimal parameters
+- interpretation of "truth"
+
+Unresolved questions
+
+Summarize
 
