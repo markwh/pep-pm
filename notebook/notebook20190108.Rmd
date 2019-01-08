@@ -27,4 +27,37 @@ microbenchmark(f1(args), g1(args))
 ```
 
 
+Right, what I really want to do is [profile](http://adv-r.had.co.nz/Profiling.html) my code. I'll use [profvis](https://rstudio.github.io/profvis/) for this.
 
+```{r}
+install.packages("profvis")
+library(profvis)
+
+p <- profvis( {
+    fres <- f1(args)
+  print(fres)
+})
+
+p
+```
+
+That's really cool! Starts off with a total time of 1600 ms. Clearly shows a redundant mcflfun call, and nested within that, 3 redundant flfun calls. Easy to fix! Try now (after some very minor tweaks):
+
+```{r}
+foo2 <- mcflo_inps(swotlist = reachdata$SacramentoUpstream, fl = "metroman", 
+                  mc = "metroman", metric = "nrmse")
+
+f2 <- foo$f
+g2 <- foo$g
+args <- foo2$p_init
+
+p2 <- profvis( {
+  fres <- f2(args)
+  print(fres)
+})
+
+p2
+```
+
+
+That helped, but it only cut the time in half. Redundancies persist.

@@ -167,21 +167,13 @@ mc <- function(flfun,
 
 mc_omniscient <- function(flfun) {
   
-  gradfun <- function(params) {
-    if (is.null(attr(flfun(params), "gradient"))) return(NULL)
-    
-    swotlist <- flfun(params)
-    ns <- nrow(swotlist[["W"]])
-    nt <- ncol(swotlist[["W"]])
-    
-    flgrad <- attr(flfun(params), "gradient") # really a Jacobian matrix
-    # Jacobian of omniscient mc function is identity matrix, so return flgrad
-    flgrad
-  }
-  
   out <- function(params) {
     swotlist <- flfun(params)
-    attr(swotlist, "gradient") <- gradfun(params)
+    # attr(swotlist, "gradient") <- gradfun(params)
+    attr(swotlist, "gradient") <- function(params) {
+      # Jacobian of omniscient mc function is identity matrix, so return fl gradient
+      return(attr(swotlist, "gradient"))
+    }
     return(swotlist)
   }
   
@@ -192,7 +184,6 @@ mc_omniscient <- function(flfun) {
 mc_mean <- function(flfun) {
   
   gradfun <- function(params) {
-    if (is.null(attr(flfun(params), "gradient"))) return(NULL)
     
     swotlist <- flfun(params)
     Qhat <- swotlist[["Qhat"]]
@@ -208,7 +199,7 @@ mc_mean <- function(flfun) {
     mcgrad <- matrix(1 / ns, nrow = ns * nt, ncol = ns * nt)
     mcgrad[makezero] <- 0
     
-    flgrad <- attr(flfun(params), "gradient")
+    flgrad <- attr(swotlist, "gradient")
     
     outmat <- flgrad %*% mcgrad
     outmat
@@ -232,7 +223,6 @@ mc_mean <- function(flfun) {
 mc_bam <- function(flfun) {
 
   gradfun <- function(params) {
-    if (is.null(attr(flfun(params), "gradient"))) return(NULL)
     swotlist <- flfun(params)
     Qhat <- swotlist[["Qhat"]]
     
@@ -255,7 +245,7 @@ mc_bam <- function(flfun) {
     makezero <- outer(tindvec, tindvec, function(x, y) x != y)
     mcgrad[makezero] <- 0
 
-    flgrad <- attr(flfun(params), "gradient")
+    flgrad <- attr(swotlist, "gradient")
     
     outmat <- flgrad %*% mcgrad
     outmat

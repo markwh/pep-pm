@@ -28,7 +28,7 @@ metric_rrmse <- function(mcflfun, gradient = TRUE) {
     
     #-- begin gradient calculation-----
     # Jacobian matrix of Q predictor (mcfl)
-    pgrad <- attr(mcflfun(params), "gradient")
+    pgrad <- attr(swotlist_post, "gradient")
 
     # objective gradient wrt Qbar (mcfl prediction)
     ograd1 <- as.vector(sqrt(1 / (length(relres) * relres %*% relres)))
@@ -72,7 +72,7 @@ metric_nrmse <- function(mcflfun, gradient = TRUE) {
     
     #-- begin gradient calculation-----
     # Jacobian matrix of Q predictor (mcfl)
-    pgrad <- attr(mcflfun(params), "gradient")
+    pgrad <- attr(swotlist_post, "gradient")
     
     # objective gradient wrt Qbar (mcfl prediction)
     ograd1 <- resids / mean(Qobs)
