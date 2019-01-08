@@ -47,8 +47,8 @@ That's really cool! Starts off with a total time of 1600 ms. Clearly shows a red
 foo2 <- mcflo_inps(swotlist = reachdata$SacramentoUpstream, fl = "metroman", 
                   mc = "metroman", metric = "nrmse")
 
-f2 <- foo$f
-g2 <- foo$g
+f2 <- foo2$f
+g2 <- foo2$g
 args <- foo2$p_init
 
 p2 <- profvis( {
@@ -60,4 +60,28 @@ p2
 ```
 
 
-That helped, but it only cut the time in half. Redundancies persist.
+That helped, but it only cut the time in half. Redundancies persist.Try memoising!
+
+```{r}
+library(memoise)
+```
+
+Now that I've memoised, try a third time.
+
+```{r}
+foo3 <- mcflo_inps(swotlist = reachdata$SacramentoUpstream, fl = "metroman", 
+                  mc = "metroman", metric = "nrmse")
+
+f3 <- foo3$f
+g3 <- foo3$g
+args <- foo3$p_init
+
+p3 <- profvis( {
+  fres <- f3(args)
+  print(fres)
+})
+
+p3
+```
+
+

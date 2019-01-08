@@ -183,9 +183,11 @@ mc_omniscient <- function(flfun) {
 
 mc_mean <- function(flfun) {
   
+  ff_mem <- memoise(flfun)
+  
   gradfun <- function(params) {
     
-    swotlist <- flfun(params)
+    swotlist <- ff_mem(params)
     Qhat <- swotlist[["Qhat"]]
     
     # Begin Jacobian calculation (see mcflo-math document)
@@ -206,7 +208,7 @@ mc_mean <- function(flfun) {
   }
   
   out <- function(params) {
-    swotlist <- flfun(params)
+    swotlist <- ff_mem(params)
     stopifnot(!is.null(swotlist[["Qhat"]]))
     Qhat <- swotlist[["Qhat"]]
     Qhat_new <- swot_vec2mat(apply(Qhat, 2, mean), Qhat)
@@ -222,8 +224,10 @@ mc_mean <- function(flfun) {
 
 mc_bam <- function(flfun) {
 
+  ff_mem <- memoise(flfun)
+  
   gradfun <- function(params) {
-    swotlist <- flfun(params)
+    swotlist <- ff_mem(params)
     Qhat <- swotlist[["Qhat"]]
     
     ns <- nrow(Qhat)
@@ -253,7 +257,7 @@ mc_bam <- function(flfun) {
   
   out <- function(params) {
     # browser()
-    swotlist <- flfun(params)
+    swotlist <- ff_mem(params)
     stopifnot(!is.null(swotlist[["Qhat"]]))
     Qhat <- swotlist[["Qhat"]]
     Qhat_new <- swot_vec2mat(apply(Qhat, 2, geomMean), Qhat)
