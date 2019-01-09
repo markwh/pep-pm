@@ -5,17 +5,18 @@
 #' - "manning_bam": n, then A0_median
 #' - "metroman": a (vector), then b vector, then A0_median
 fl <- function(swotlist, 
-               method = c("bam_man", "metroman", "bam_amhg", "omniscient")) {
+               method = c("bam_man", "metroman", "bam_amhg", "omniscient"),
+               gradient = TRUE) {
   method <- match.arg(method)
   
   if (method == "bam_man") {
-    out <- fl_bamman(swotlist)
+    out <- fl_bamman(swotlist, gradient = gradient)
   } else if (method == "metroman") {
-    out <- fl_mm(swotlist)
+    out <- fl_mm(swotlist, gradient = gradient)
   } else if (method == "bam_amhg") {
     stop("AMHG flow law not implemented")
   } else if (method == "omniscient") {
-    out <- fl_omni(swotlist)
+    out <- fl_omni(swotlist, gradient = gradient) # Never should use gradient with omniscient
   }
   
   out
@@ -26,7 +27,7 @@ fl <- function(swotlist,
 #' Returns a function of paramaters, a vector of length n_s + 1, with the first 
 #' element being logn, the remaining elements as log(A_0) (median-referenced)
 #' 
-fl_bamman <- function(swotlist) {
+fl_bamman <- function(swotlist, gradient = TRUE) {
   logW <- log(swotlist$W)
   logS <- log(swotlist$S)
   # browser()
@@ -39,6 +40,7 @@ fl_bamman <- function(swotlist) {
     # browser()
     logn <- params[1]
     A0_med <- exp(params[-1])
+    # if (length(A0_med) != nrow(dA)) browser()
     Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
     logA <- log(Amat)
     
@@ -49,20 +51,23 @@ fl_bamman <- function(swotlist) {
     Qhat_new <- exp(logQ)
     outlist$Qhat <- Qhat_new
     
-    # Gradient-------------------------------------------------------------
-    dqdlogn <- -as.vector(Qhat_new)
-    logA0 <- params[-1]
-    A0mat <- swot_vec2mat(exp(logA0), Qhat_new)
-    dqdlogA <- 5/3 * Qhat_new / Amat * A0mat
+    if (gradient) {
+      # Gradient-------------------------------------------------------------
+      dqdlogn <- -as.vector(Qhat_new)
+      logA0 <- params[-1]
+      A0mat <- swot_vec2mat(exp(logA0), Qhat_new)
+      dqdlogA <- 5/3 * Qhat_new / Amat * A0mat
+      
+      # need a permutation matrix.
+      diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Amat), 
+                            simplify = FALSE)
+      permmat <- Matrix(Reduce(diagmats, f = cbind))
+      dlogAmat <- permmat %*% Diagonal(x = as.vector(dqdlogA))
+      gradmat <- rbind(dqdlogn, dlogAmat)
+      
+      attr(outlist, "gradient") <- gradmat
+    }
     
-    # need a permutation matrix.
-    diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Amat), 
-                          simplify = FALSE)
-    permmat <- Reduce(diagmats, f = cbind)
-    dlogAmat <- permmat %*% diag(as.vector(dqdlogA))
-    gradmat <- rbind(dqdlogn, dlogAmat)
-    
-    attr(outlist, "gradient") <- gradmat
     return(outlist)
   }
   out
@@ -72,7 +77,7 @@ fl_bamman <- function(swotlist) {
 #' 
 #' Implements a power-law for Manning's n based on depth (A / W)
 
-fl_mm <- function(swotlist) {
+fl_mm <- function(swotlist, gradient = TRUE) {
   logW <- log(swotlist$W)
   logS <- log(swotlist$S)
   dA <- swotlist$dA
@@ -98,22 +103,25 @@ fl_mm <- function(swotlist) {
     Qhat_new <- exp(logQ)
     outlist$Qhat <- Qhat_new
     
-    # Gradient-------------------------------------------------------------
-    dqda <- -as.vector(Qhat_new)
-    dqdb <- dqda * as.vector((logA - logW))
-    A0mat <- swot_vec2mat(A0_med, logW)
-    dqdlogA <- (5 - 3 * bmat)/(3 * Amat) * Qhat_new * A0mat
-    
-    # need a permutation matrix.
-    diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Amat), 
-                          simplify = FALSE)
-    permmat <- Reduce(diagmats, f = cbind)
-    dlogAmat <- permmat %*% diag(as.vector(dqdlogA))
-    damat <- permmat %*% diag(dqda)
-    dbmat <- permmat %*% diag(dqdb)
-    gradmat <- rbind(damat, dbmat, dlogAmat)
-    
-    attr(outlist, "gradient") <- gradmat
+    if (gradient) {
+      # Gradient-------------------------------------------------------------
+      dqda <- -as.vector(Qhat_new)
+      dqdb <- dqda * as.vector((logA - logW))
+      A0mat <- swot_vec2mat(A0_med, logW)
+      dqdlogA <- (5 - 3 * bmat)/(3 * Amat) * Qhat_new * A0mat
+      
+      # need a permutation matrix.
+      diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Amat), 
+                            simplify = FALSE)
+      permmat <- Matrix(Reduce(diagmats, f = cbind))
+      dlogAmat <- permmat %*% Diagonal(x = as.vector(dqdlogA))
+      damat <- permmat %*% Diagonal(x = dqda)
+      dbmat <- permmat %*% Diagonal(x = dqdb)
+      gradmat <- rbind(damat, dbmat, dlogAmat)
+      
+      attr(outlist, "gradient") <- gradmat
+    }
+
     return(outlist)
   }
   out
@@ -123,7 +131,8 @@ fl_mm <- function(swotlist) {
 #' 
 #' Benchmark case--returns true flow, takes no parameters.
 
-fl_omni <- function(swotlist) {
+fl_omni <- function(swotlist, gradient = FALSE) {
+  if (gradient) stop("nonsensical to use gradient for omniscient flow law")
   out <- function(params = numeric(0)) {
     if (length(params > 0)) 
       warning("Nonzero-length param argument supplied.\nOmniscient flow law takes no parameters.")
@@ -147,33 +156,32 @@ fl_omni <- function(swotlist) {
 #' 
 #' @importFrom Matrix Diagonal Matrix
 mc <- function(flfun, 
-               method = c("bam", "metroman", "median", "mean", "omniscient")) {
+               method = c("bam", "metroman", "median", "mean", "omniscient"),
+               gradient = TRUE) {
   method <- match.arg(method)
   
   if (method == "omniscient") {
     mcflfun <- mc_omniscient(flfun)
   } else if (method == "bam") {
-    mcflfun <- mc_bam(flfun)
+    mcflfun <- mc_bam(flfun, gradient = gradient)
   # } else if (method == "median") {
   #   Qhat_new <- swot_vec2mat(apply(Qhat, 2, median), Qhat)
   } else if (method == "mean") {
-    mcflfun <- mc_mean(flfun)
+    mcflfun <- mc_mean(flfun, gradient = gradient)
   } else if (method == "metroman") {
-    mcflfun <- mc_mm(flfun)
+    mcflfun <- mc_mm(flfun, gradient = gradient)
   }
   
   mcflfun
 }
 
-mc_omniscient <- function(flfun) {
+mc_omniscient <- function(flfun, gradient = TRUE) {
   
   out <- function(params) {
     swotlist <- flfun(params)
-    # attr(swotlist, "gradient") <- gradfun(params)
-    attr(swotlist, "gradient") <- function(params) {
-      # Jacobian of omniscient mc function is identity matrix, so return fl gradient
-      return(attr(swotlist, "gradient"))
-    }
+    if (!gradient) attr(swotlist, "gradient") <- NULL
+    
+    # Jacobian of omniscient mc function is identity matrix, so don't touch fl gradient
     return(swotlist)
   }
   
@@ -181,31 +189,9 @@ mc_omniscient <- function(flfun) {
 }
 
 
-mc_mean <- function(flfun) {
+mc_mean <- function(flfun, gradient = TRUE) {
   
   ff_mem <- memoise(flfun)
-  
-  gradfun <- function(params) {
-    
-    swotlist <- ff_mem(params)
-    Qhat <- swotlist[["Qhat"]]
-    
-    # Begin Jacobian calculation (see mcflo-math document)
-    ns <- nrow(Qhat)
-    nt <- ncol(Qhat)
-    tindmat <- matrix(1:nt, nrow = ns, ncol = nt, byrow = TRUE)
-    tindvec <- as.vector(tindmat)
-    # TODO use sparse matrices from Matrix pkg 
-    # http://r.789695.n4.nabble.com/sparse-matrix-from-vector-outer-product-td4701795.html
-    makezero <- outer(tindvec, tindvec, function(x, y) x != y)
-    mcgrad <- matrix(1 / ns, nrow = ns * nt, ncol = ns * nt)
-    mcgrad[makezero] <- 0
-    
-    flgrad <- attr(swotlist, "gradient")
-    
-    outmat <- flgrad %*% mcgrad
-    outmat
-  }
   
   out <- function(params) {
     swotlist <- ff_mem(params)
@@ -213,47 +199,34 @@ mc_mean <- function(flfun) {
     Qhat <- swotlist[["Qhat"]]
     Qhat_new <- swot_vec2mat(apply(Qhat, 2, mean), Qhat)
     swotlist$Qhat <- Qhat_new
-    attr(swotlist, "gradient") <- gradfun(params)
+    
+    if (gradient) {
+      # Begin Jacobian calculation (see mcflo-math document)
+      ns <- nrow(Qhat)
+      nt <- ncol(Qhat)
+      tindmat <- matrix(1:nt, nrow = ns, ncol = nt, byrow = TRUE)
+      tindvec <- as.vector(tindmat)
+      # TODO use sparse matrices from Matrix pkg 
+      # http://r.789695.n4.nabble.com/sparse-matrix-from-vector-outer-product-td4701795.html
+      makezero <- outer(tindvec, tindvec, function(x, y) x != y)
+      mcgrad <- matrix(1 / ns, nrow = ns * nt, ncol = ns * nt)
+      mcgrad[makezero] <- 0
+      
+      flgrad <- attr(swotlist, "gradient")
+      jacmat <- flgrad %*% mcgrad
+      
+      attr(swotlist, "gradient") <- jacmat
+    }
+    
     swotlist
   }
-  
-  attr(out, "gradient") <- gradfun
   
   out
 }
 
-mc_bam <- function(flfun) {
+mc_bam <- function(flfun, gradient = TRUE) {
 
   ff_mem <- memoise(flfun)
-  
-  gradfun <- function(params) {
-    swotlist <- ff_mem(params)
-    Qhat <- swotlist[["Qhat"]]
-    
-    ns <- nrow(Qhat)
-    nt <- ncol(Qhat)
-    
-    Qhat_new <- swot_vec2mat(apply(Qhat, 2, geomMean), Qhat)
-    
-    # Begin Jacobian calculation (see mcflo-math document)
-    # TODO use sparse matrices from Matrix pkg 
-    # http://r.789695.n4.nabble.com/sparse-matrix-from-vector-outer-product-td4701795.html
-    mcgradmat <- Qhat_new / (ns * Qhat)
-    mcgradvec <- as.vector(mcgradmat)
-    mcgrad <- matrix(mcgradvec, nrow = ns * nt, ncol = ns * nt, byrow = FALSE)
-    
-    # Jacobian is zero when t != t'
-    tindmat <- matrix(1:nt, nrow = ns, ncol = nt, byrow = TRUE)
-    tindvec <- as.vector(tindmat)
-    
-    makezero <- outer(tindvec, tindvec, function(x, y) x != y)
-    mcgrad[makezero] <- 0
-
-    flgrad <- attr(swotlist, "gradient")
-    
-    outmat <- flgrad %*% mcgrad
-    outmat
-  }
   
   out <- function(params) {
     # browser()
@@ -262,7 +235,31 @@ mc_bam <- function(flfun) {
     Qhat <- swotlist[["Qhat"]]
     Qhat_new <- swot_vec2mat(apply(Qhat, 2, geomMean), Qhat)
     swotlist$Qhat <- Qhat_new
-    attr(swotlist, "gradient") <- gradfun(params)
+    
+    if (gradient) {
+      ns <- nrow(Qhat)
+      nt <- ncol(Qhat)
+      
+      # Begin Jacobian calculation (see mcflo-math document)
+      # TODO use sparse matrices from Matrix pkg 
+      # http://r.789695.n4.nabble.com/sparse-matrix-from-vector-outer-product-td4701795.html
+      mcgradmat <- Qhat_new / (ns * Qhat)
+      mcgradvec <- as.vector(mcgradmat)
+      mcgrad <- matrix(mcgradvec, nrow = ns * nt, ncol = ns * nt, byrow = FALSE)
+      
+      # Jacobian is zero when t != t'
+      tindmat <- matrix(1:nt, nrow = ns, ncol = nt, byrow = TRUE)
+      tindvec <- as.vector(tindmat)
+      
+      makezero <- outer(tindvec, tindvec, function(x, y) x != y)
+      mcgrad[makezero] <- 0
+      
+      flgrad <- attr(swotlist, "gradient")
+      jacmat <- flgrad %*% mcgrad
+
+      attr(swotlist, "gradient") <- jacmat
+    }
+    
     swotlist
   }
   
@@ -270,10 +267,10 @@ mc_bam <- function(flfun) {
 }
 
 #' Units are important here. x: meters, t: days
-mc_mm <- function(flfun) {
+mc_mm <- function(flfun, gradient = TRUE) {
   
   out <- function(params) {
-    swotlist <- mc_mean(flfun)(params)
+    swotlist <- mc_mean(flfun, gradient = gradient)(params)
     
     Ahat <- swotlist$Ahat
     tmat <- swotlist$t * 3600 * 24 # convert from days to seconds
@@ -327,10 +324,150 @@ mcflob <- function(swotlist,
   mc_method <- match.arg(mc)
   ob <- match.arg(ob)
   
-  flfun <- fl(swotlist, method = fl_method)  # flow law
-  mcflfun <- mc(flfun, method = mc_method) # mass-conserved flow law
+  flfun <- fl(swotlist, method = fl_method, gradient = gradient)  # flow law
+  mcflfun <- mc(flfun, method = mc_method, gradient = gradient) # mass-conserved flow law
   omcflfun <- metric(mcflfun, method = ob, gradient = gradient)
   
   omcflfun
 }
 
+
+
+
+# objective functions with gradients --------------------------------------
+
+#' These return a function of parameters suitable to bue run in nlm().
+#' 
+#' @param mcflfun a "loaded" mass-conserved flow law function, ideally with a 
+#'  gradient attribute
+
+metric_rrmse <- function(mcflfun, gradient = TRUE) {
+  out <- function(params) {
+    if (missing(params)) {  # for omniscient flow law
+      params <- numeric(0) 
+      gradient <- FALSE
+    }
+    swotlist_post <- mcflfun(params)
+    Qhat <- swotlist_post$Qhat
+    Qobs <- swotlist_post[["Q"]]
+    relres <- as.vector((Qhat - Qobs) / Qobs) # vector of relative resids
+    
+    relmse <- as.vector(relres %*% relres) / length(relres)
+    rrmse <- sqrt(relmse)
+    
+    if (gradient) {
+      #-- begin gradient calculation-----
+      # Jacobian matrix of Q predictor (mcfl)
+      # browser()
+      pgrad <- attr(swotlist_post, "gradient")
+      
+      # objective gradient wrt Qbar (mcfl prediction)
+      ograd1 <- as.vector(sqrt(1 / (length(relres) * relres %*% relres)))
+      ograd2 <- relres / as.vector(Qobs)
+      ograd <- ograd1 * ograd2
+      
+      # mcflo gradient (using Jacobian from mcfl)
+      grad <- as.vector(pgrad %*% ograd)
+      
+      #--put it all together---------
+      attr(rrmse, "gradient") <- grad
+    }
+    
+    rrmse
+  }
+  
+  out
+}
+
+
+#' These return a function of parameters suitable to bue run in nlm().
+#' 
+#' @param mcflfun a "loaded" mass-conserved flow law function, ideally with a 
+#'  gradient attribute
+
+metric_nrmse <- function(mcflfun, gradient = TRUE) {
+  out <- function(params) {
+    
+    if (missing(params)) {  # for omniscient flow law
+      params <- numeric(0) 
+      gradient <- FALSE
+    }
+    
+    swotlist_post <- mcflfun(params)
+    Qhat <- swotlist_post$Qhat
+    Qobs <- swotlist_post[["Q"]]
+    resids <- as.vector((Qhat - Qobs)) # vector of relative resids
+    
+    mse <- as.vector(resids %*% resids) / length(resids)
+    nrmse <- sqrt(mse) / mean(Qobs)
+    if (!is.finite(nrmse)) dput(params)
+    
+    if (gradient) {
+      #-- begin gradient calculation-----
+      # Jacobian matrix of Q predictor (mcfl)
+      pgrad <- attr(swotlist_post, "gradient")
+      
+      # objective gradient wrt Qbar (mcfl prediction)
+      ograd1 <- resids / mean(Qobs)
+      ograd <- ograd1 / sqrt(mse) / length(resids)
+      
+      # mcflo gradient (using Jacobian from mcfl)
+      grad <- as.vector(pgrad %*% ograd)
+      
+      #--put it all together---------
+      attr(nrmse, "gradient") <- grad
+    }
+
+    nrmse
+  }
+  
+  out
+}
+
+
+#' Manning n parameters for MetroMan
+npars_metroman <- function(swotlist, mc = TRUE, area = c("stat", "true"),
+                           qagfun = geomMean) {
+  area <- match.arg(area)
+  
+  Wmat <- swotlist$W
+  Smat <- swotlist$S
+  
+  if (area == "stat") {
+    swotlist$dA <- rezero_dA(swotlist$dA, "median")
+    A0vec <- apply(swotlist$A, 1, median)
+    Amat <- swotlist$dA + swot_vec2mat(A0vec, Wmat)
+  } else if (area == "true") {
+    Amat <- swotlist$A
+  }
+  
+  if (mc) {
+    Qvec <- apply(swotlist$Q, 2, qagfun)
+    Qmat <- swot_vec2mat(Qvec, Wmat)
+  } else {
+    Qmat <- swotlist$Q
+  }
+  Qdotmat <- Wmat^(-2/3) * Amat^(5/3) * Smat^(1/2)
+  nmat <- Qdotmat / Qmat
+  
+  # log(n) = a + b * log(d) = a + b * log(A / W)
+  logd <- log(Amat) - log(Wmat) # log-depth
+  
+  # simple linear regression of logn on logd.
+  ddf <- as.data.frame(t(logd))
+  ndf <- as.data.frame(t(log(nmat)))
+  dncor <- map2_dbl(ddf, ndf, cor)
+  dsd <- map_dbl(ddf, sd)
+  nsd <- map_dbl(ndf, sd)
+  dmean <- map_dbl(ddf, mean)
+  nmean <- map_dbl(ndf, mean)
+  bvec <- dncor * nsd / dsd
+  avec <- nmean - (bvec * dmean)
+  
+  amat <- swot_vec2mat(avec, Wmat)
+  bmat <- swot_vec2mat(bvec, Wmat)
+  nmat_pred <- exp(amat + bmat * logd)
+  
+  out <- list(a = avec, b = bvec, n = nmat_pred)
+  out
+}

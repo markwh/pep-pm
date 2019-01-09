@@ -84,4 +84,52 @@ p3 <- profvis( {
 p3
 ```
 
+Now we're at about 1/8 the original time. See how much Matrix can help.
+
+
+```{r}
+foo4 <- mcflo_inps(swotlist = reachdata$SacramentoUpstream, fl = "metroman", 
+                  mc = "metroman", metric = "nrmse")
+
+f4 <- foo4$f
+g4 <- foo4$g
+args <- foo4$p_init
+
+p4 <- profvis( {
+  fres <- f4(args)
+  # print(fres)
+})
+
+p4
+```
+
+
+`Matrix()` call is almost 800 ms. After playing around, it helps in cases where the matrix is not large, but hurts in the case where I thought it would help most. 
+
+I'll stop here. I achieved a ~10x speedup, which is awesome.
+
+
+
+## The next day...
+
+I cleaned up (at least I think they're cleaner) some functions and now I'm skeptical that the speedup is still there. Test on this new one:
+
+```{r}
+foo5 <- mcflo_inps(swotlist = reachdata$GaronneUpstream, fl = "bam_man", 
+                  mc = "bam", metric = "rrmse", method = "optim")
+
+f5 <- foo5$f
+g5 <- foo5$g
+args <- foo5$p_stat
+f5(args)
+p5 <- profvis( {
+  fres <- f5(args)
+  fgrad <- g5(args)
+  # print(fres)
+})
+
+p5
+```
+
+
 

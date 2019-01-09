@@ -8,7 +8,7 @@ munging: TRUE
 logging: FALSE
 logging_level: INFO
 load_libraries: TRUE
-libraries: dplyr, purrr, tidyr, ggplot2, swotr
+libraries: dplyr, purrr, tidyr, ggplot2, swotr, Matrix, memoise
 as_factors: TRUE
 data_tables: FALSE
 attach_internal_libraries: FALSE

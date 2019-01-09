@@ -3,139 +3,6 @@
 
 
 
-# objective functions with gradients --------------------------------------
-
-#' These return a function of parameters suitable to bue run in nlm().
-#' 
-#' @param mcflfun a "loaded" mass-conserved flow law function, ideally with a 
-#'  gradient attribute
-
-metric_rrmse <- function(mcflfun, gradient = TRUE) {
-  out <- function(params) {
-    if (missing(params)) {  # for omniscient flow law
-      params <- numeric(0) 
-      gradient <- FALSE
-    }
-    swotlist_post <- mcflfun(params)
-    Qhat <- swotlist_post$Qhat
-    Qobs <- swotlist_post[["Q"]]
-    relres <- as.vector((Qhat - Qobs) / Qobs) # vector of relative resids
-    
-    relmse <- as.vector(relres %*% relres) / length(relres)
-    rrmse <- sqrt(relmse)
-    
-    if (!gradient) return(rrmse)
-    
-    #-- begin gradient calculation-----
-    # Jacobian matrix of Q predictor (mcfl)
-    pgrad <- attr(swotlist_post, "gradient")
-
-    # objective gradient wrt Qbar (mcfl prediction)
-    ograd1 <- as.vector(sqrt(1 / (length(relres) * relres %*% relres)))
-    ograd2 <- relres / as.vector(Qobs)
-    ograd <- ograd1 * ograd2
-    
-    # mcflo gradient (using Jacobian from mcfl)
-    grad <- as.vector(pgrad %*% ograd)
-    
-    #--put it all together---------
-    attr(rrmse, "gradient") <- grad
-    rrmse
-  }
-  
-  out
-}
-
-
-#' These return a function of parameters suitable to bue run in nlm().
-#' 
-#' @param mcflfun a "loaded" mass-conserved flow law function, ideally with a 
-#'  gradient attribute
-
-metric_nrmse <- function(mcflfun, gradient = TRUE) {
-  out <- function(params) {
-    
-    if (missing(params)) {  # for omniscient flow law
-      params <- numeric(0) 
-      gradient <- FALSE
-    }
-    
-    swotlist_post <- mcflfun(params)
-    Qhat <- swotlist_post$Qhat
-    Qobs <- swotlist_post[["Q"]]
-    resids <- as.vector((Qhat - Qobs)) # vector of relative resids
-    
-    mse <- as.vector(resids %*% resids) / length(resids)
-    nrmse <- sqrt(mse) / mean(Qobs)
-
-    if (!gradient) return(nrmse)
-    
-    #-- begin gradient calculation-----
-    # Jacobian matrix of Q predictor (mcfl)
-    pgrad <- attr(swotlist_post, "gradient")
-    
-    # objective gradient wrt Qbar (mcfl prediction)
-    ograd1 <- resids / mean(Qobs)
-    ograd <- ograd1 / sqrt(mse) / length(resids)
-    
-    # mcflo gradient (using Jacobian from mcfl)
-    grad <- as.vector(pgrad %*% ograd)
-    
-    #--put it all together---------
-    attr(nrmse, "gradient") <- grad
-    nrmse
-  }
-  
-  out
-}
-
-#' Manning n parameters for MetroMan
-npars_metroman <- function(swotlist, mc = TRUE, area = c("stat", "true"),
-                           qagfun = geomMean) {
-  area <- match.arg(area)
-  
-  Wmat <- swotlist$W
-  Smat <- swotlist$S
-  
-  if (area == "stat") {
-    swotlist$dA <- rezero_dA(swotlist$dA, "median")
-    A0vec <- apply(swotlist$A, 1, median)
-    Amat <- swotlist$dA + swot_vec2mat(A0vec, Wmat)
-  } else if (area == "true") {
-    Amat <- swotlist$A
-  }
-
-  if (mc) {
-    Qvec <- apply(swotlist$Q, 2, qagfun)
-    Qmat <- swot_vec2mat(Qvec, Wmat)
-  } else {
-    Qmat <- swotlist$Q
-  }
-  Qdotmat <- Wmat^(-2/3) * Amat^(5/3) * Smat^(1/2)
-  nmat <- Qdotmat / Qmat
-  
-  # log(n) = a + b * log(d) = a + b * log(A / W)
-  logd <- log(Amat) - log(Wmat) # log-depth
-  
-  # simple linear regression of logn on logd.
-  ddf <- as.data.frame(t(logd))
-  ndf <- as.data.frame(t(log(nmat)))
-  dncor <- map2_dbl(ddf, ndf, cor)
-  dsd <- map_dbl(ddf, sd)
-  nsd <- map_dbl(ndf, sd)
-  dmean <- map_dbl(ddf, mean)
-  nmean <- map_dbl(ndf, mean)
-  bvec <- dncor * nsd / dsd
-  avec <- nmean - (bvec * dmean)
-  
-  amat <- swot_vec2mat(avec, Wmat)
-  bmat <- swot_vec2mat(bvec, Wmat)
-  nmat_pred <- exp(amat + bmat * logd)
-  
-  out <- list(a = avec, b = bvec, n = nmat_pred)
-  out
-}
-
 #' Get Manning parameters and n from stats (and possibly regression).
 #' Also compute Q based on qagfun.
 #' 
@@ -262,16 +129,17 @@ fl_peek <- function(swotlist,
 mcflo_inps <- function(swotlist, 
                        fl = c("bam_man", "metroman", "omniscient"), 
                        mc = c("bam", "metroman", "omniscient"), 
+                       method = c("stats", "optim"),
                        metric = c("rrmse", "nrmse"),
-                       msg = NA, startparams = NULL) {
+                       msg = NA) {
   fl <- match.arg(fl)
   mc <- match.arg(mc)
   metric <- match.arg(metric)
-  
+  # browser()
   # Purge NA's from swotlist
   ndat1 <- nrow(swotlist$W) * ncol(swotlist$W)
   swotlist <- swot_purge_nas(swotlist)
-  swotlist$dA <- rezero_dA(swotlist$dA)
+  swotlist$dA <- rezero_dA(swotlist$dA, zero = "median")
   ndat2 <- nrow(swotlist$W) * ncol(swotlist$W)
   if (ndat2 < ndat1) {
     message(sprintf("Purged %.1f percent of data", (1 - ndat2 / ndat1) * 100))
@@ -281,30 +149,40 @@ mcflo_inps <- function(swotlist,
   if (!is.na(msg)) {
     cat(msg, " ")
   }
-  
+
+  # Initialize list to return
+  res <- list()
+
   # Initialization
   statparams <- fl_peek(swotlist, fl = fl)
-  if (is.null(startparams)) startparams <- statparams
+  res$p_stat <- statparams
   
-  mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
-                  gradient = TRUE)
-  
-  # Parameter bounds (just on A0)
-  # Requirement: A0 parameters are last n_s elements in vector
-  minA0 <- -apply(swotlist[["dA"]], 1, min, na.rm = TRUE)
-  ns <- length(minA0)
-  
-  minA0 <- -apply(swotlist[["dA"]], 1, min, na.rm = TRUE) + 0.1 # add a little tolerance
-  ns <- length(minA0)
-  mins0 <- rep(-Inf, length(statparams) - ns)
-  mins <- c(mins0, log(minA0))
-  
-  # Compile into a list to return
-  res <- list()
-  res$f <- mcflo
-  res$g <- function(params) attr(mcflo(params), "gradient")
-  res$p_init <- startparams
-  res$p_mins <- mins
+  if (method == "stats" || fl == "omniscient") {
+    res$f <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
+                    gradient = FALSE)
+    res$g <- NULL
+  } else {
+    mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
+                    gradient = TRUE)
+    mcflo_mem <- memoise(mcflo)
+    res$f <- mcflo_mem
+    res$g <- function(params) attr(mcflo_mem(params), "gradient")
+    
+    # Parameter bounds (just on A0)
+    # Requirement: A0 parameters are last n_s elements in vector
+    minA0 <- -apply(swotlist[["dA"]], 1, min, na.rm = TRUE)
+    ns <- length(minA0)
+    
+    minA0 <- -apply(swotlist[["dA"]], 1, min, na.rm = TRUE) + 1 # add a little tolerance
+    ns <- length(minA0)
+    mins0 <- rep(-Inf, length(statparams) - ns)
+    mins <- c(mins0, log(minA0) + 0.01) # More tolerance added here
+    
+    # Compile into a list to return
+    
+    res$p_mins <- mins    
+  }
+
   res$data <- swotlist
   
   res
@@ -312,17 +190,19 @@ mcflo_inps <- function(swotlist,
 
 #' Do the optimization
 #' @param inplist a list of inputs, generated with \code{mcflo_inps}
-mcflo_optim <- function(inplist, timeout = 600, ...) {
+mcflo_optim <- function(inplist, timeout = 600, startparams = NULL, ...) {
   
   wt <- R.utils::withTimeout
   
+  if (is.null(startparams)) startparams <- inplist$p_stat
+  
   # browser()
-  resopt <- wt(optim(par = inplist$p_init, fn = inplist$f, 
+  resopt <- wt(optim(par = startparams, fn = inplist$f, 
                      lower = inplist$p_mins,
                      gr = inplist$g, method = "L-BFGS-B", ...), 
                timeout = timeout)
-  
-  res$metric <- mcflo(resopt$par)
+  res <- list()
+  res$metric <- inplist$f(resopt$par)
   res$params <- resopt$par
   res$optim.info <- resopt
   
@@ -339,6 +219,8 @@ master_mcflo <- function(case,
                          msg = NA, startparams = NULL,
                          timeout = 600,
                          ...) {
+  # browser()
+  
   fl <- match.arg(fl)
   mc <- match.arg(mc)
   metric <- match.arg(metric)
@@ -346,9 +228,8 @@ master_mcflo <- function(case,
   swotlist <- reachdata[[case]]
   
   optim_inps <- mcflo_inps(swotlist = swotlist, fl = fl, mc = mc, 
-                           metric = metric, msg = msg, 
-                           startparams = startparams)
-  
+                           method = method, metric = metric, msg = msg)
+
   res <- list()
   
   if (fl == "omniscient") {
@@ -356,11 +237,13 @@ master_mcflo <- function(case,
     res$params <- numeric()
   } else if (method == "stats") {
     if (!is.null(startparams)) stop("for 'stats' method, startparams must be left NULL")
-    statparams <- optim_inps$p_init
+    statparams <- optim_inps$p_stat
     res$metric <- as.numeric(optim_inps$f(statparams))
     res$params <- statparams
   } else if (method == "optim") {
-    res <- mcflo_optim(inplist = optim_inps, timeout = timeout, ...)
+    res <- mcflo_optim(inplist = optim_inps, timeout = timeout, 
+                       startparams = startparams, ...)
+    if (is.memoised(optim_inps$f)) forget(optim_inps$f)
   }
   
   res
