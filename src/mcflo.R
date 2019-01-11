@@ -38,9 +38,9 @@ cache("resultList")
 
 # manually redo bad optimizations
 
-# toredo <- which(convgvec == 1)
-toredo <- which(failureVec)
-# toredo <- 385
+toredo <- which(convgvec == 1)
+# toredo <- which(failureVec)
+# toredo <- 579
 
 inputMatrix[toredo, ]
 
@@ -60,9 +60,12 @@ resultList[[toredo]] <- do.call(master_mcflo,
 
 for (ind in toredo) {
   print(inputMatrix[ind, ])
+  startpars <- resultList[[ind]]$params
   resultList[[ind]] <- do.call(master_mcflo, 
                             args = append(as.list(inputMatrix[ind, ]), 
-                              values = list(control = list(trace = 3, maxit = 500))))
+                              values = list(
+                                startparams = startpars,
+                                control = list(trace = 3, maxit = 500))))
 }
 
 

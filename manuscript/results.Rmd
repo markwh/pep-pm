@@ -13,6 +13,14 @@ What is the overall idea--do McFl methods work, as evaluated by performance metr
 
 - summary statistics: max, median, min RRMSE, NRMSE for non-omniscient methods (4 mcfl methods x 2 metrics)
 
+```{r}
+resultMatrix %>% 
+  group_by(metric, method) %>% 
+  filter(mc != "omniscient", fl != "omniscient") %>% 
+  summarize_at(.vars = "result", .funs = funs(median, max), na.rm = TRUE)
+```
+
+
 Is either one or the other responsible for poor McFLI performance? 
 
 Evaluation of individual fl methods

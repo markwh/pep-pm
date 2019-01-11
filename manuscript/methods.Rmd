@@ -11,9 +11,17 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Methods
 
-The best-achievable performance of a discharge algorithm is given by an optimal set of parameters. There are at least two interpretations of this. One uses a physical and statistical interpretation to obtain "true" parameters from SWOT and ancillary data (including true discharge and channel geometry). A second explicitly sets up an optimization problem using a pefrormance meteric calculated from true and predicted discharge. 
+A discharge estimation algorithm is a function, $g$, of parameters, $\theta$, and data, $\mathbf{x}$. The values of this function constitute predictions of dischrge, $\hat{Q}$ at a particular time, $t$, and location, $s$. That is:
 
-This section proceeds by introducing important notation, followed by a description of the benchmark datasets. The two appraoches (physical/statistical and optimization) for obtaining the best flow-law parameters are then presented, with individual variants described in detail. 
+$$
+\hat{Q}_{st} = g(\theta, \mathbf{x})
+$$
+
+In order to assess the performance of a given discharge algorithm, we rely on benchmark datasets that contain both $\mathbf{x}$--as would be available to SWOT--as well as values of true discharge, $Q_{st}$--which would not.
+
+There are at least two definitions of "best" parameters, $\theta$. One uses a physical and statistical interpretation to obtain "true" parameters from SWOT and ancillary data (including true discharge and channel geometry). A second explicitly sets up an optimization problem using a pefrormance meteric calculated from true and predicted discharge. 
+
+The best-achievable performance of a discharge algorithm is defined in relation to a performance metric, which summarizes the mismatch between $\hat{Q}$ and true discharge, $Q$, over a number of of locations and times. There are at least two interpretations of this. 
 
 
 ### Datasets

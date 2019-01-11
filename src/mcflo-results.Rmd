@@ -104,7 +104,8 @@ plotdata %>%
              shape = 21, alpha = 0.6,
              position = position_jitterdodge(dodge.width = 0.75, 
                                              jitter.width = 0.1)) +
-  facet_grid(metric ~ method) +
+  geom_hline(yintercept = 0.35, linetype = 2) +
+  facet_grid(metric ~ method, scales = "free_y") +
   theme_bw() +
   theme(legend.position = "bottom")
 
@@ -124,6 +125,58 @@ plotdata %>%
   annotation_logticks(sides = "l") +
   theme(legend.position = "bottom")
 ```
+
+Version for slides
+
+```{r, fig.width = 6, fig.height = 4, dpi = 300}
+
+mytheme <- theme_bw() + 
+  theme(
+    plot.background = element_rect(fill = "#a0a0a0"),
+    # text = element_text(size = 15)
+    )
+
+slideresdf <- plotdata %>% 
+  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
+         metric = plyr::mapvalues(metric, 
+                                  from = c("nrmse", "rrmse"),
+                                  to = c("nRMSE", "rRMSE")),
+         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
+                              to = c("mc:BAM", "mc:Met", "mc:Omni")))
+
+# plotdata %>% 
+#   mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+#                               to = c("fl:BAM", "fl:Met", "fl:Omni")),
+#          metric = plyr::mapvalues(metric, 
+#                                   from = c("nrmse", "rrmse"),
+#                                   to = c("nRMSE", "rRMSE")),
+#          mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
+#                               to = c("mc:BAM", "mc:Met", "mc:Omni"))) %>% 
+slideresgg <- ggplot(slideresdf, aes(x = fl, y = result, text = case)) + 
+  # geom_line() +
+  geom_boxplot(aes(fill = mc), outlier.shape = NA) +
+  geom_point(aes(fill = mc), 
+             shape = 21, alpha = 0.6,
+             position = position_jitterdodge(dodge.width = 0.75, 
+                                             jitter.width = 0.1)) +
+  geom_hline(yintercept = 0.35, linetype = 2) +
+  facet_grid(metric ~ method, scales = "free_y") +
+  mytheme +
+  scale_y_continuous(name = NULL) + 
+  scale_x_discrete(name = NULL) +
+  scale_fill_discrete(name = NULL) +
+  theme(legend.position = "bottom")
+
+
+slideresgg
+ggsave("../graphs/slides/mcflo-res-boxplots.png")
+
+slideresgg_plotly <- slideresgg
+slideresgg_plotly$layers <- slideresgg$layers[-1]
+ggplotly(slideresgg_plotly, tooltip = "text") # This one doesn't help much.
+```
+
 
 Table of how many successfully converged
 
@@ -248,12 +301,117 @@ paramdf_joined %>%
   geom_violin(fill = NA) +
   facet_grid(flparam ~ mc, scales = "free") + 
   theme(legend.position = "right")
+```
 
+Pared down version for slides. 
+
+```{r, fig.width = 6, fig.height = 4, dpi = 300}
+slidepardf <- paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim")),
+         fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
+         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
+                              to = c("mc:BAM", "mc:Met", "mc:Omni")),
+         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
+         flparam = paste(fl, shortparam, sep = "_")) %>% 
+  # summary()
+  filter(fl %in% c("fl:BAM", "fl:Met"),
+         !grepl("^logA0", paramname),
+         metric == "rrmse", paramname != "MISSING")
+
+slidepargg <- ggplot(slideresdf, aes(x = method, y = paramval)) +
+  geom_line(aes(color = case, 
+             group = paste0(case, paramname))) +
+  geom_point(aes(color = case)) +
+  geom_violin(fill = NA) +
+  facet_grid(flparam ~ mc, scales = "free") + 
+  scale_y_continuous(name = NULL) +
+  scale_x_discrete(name = NULL) +
+  mytheme +
+  theme(legend.position = "none")
+slidepargg
+ggsave("../graphs/slides/mcflo-param-lineplots.png")
+
+ggplotly(slidepargg)
 ```
 
 
+```{r, fig.width = 6, fig.height = 4, dpi = 300}
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim")),
+         fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
+         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
+                              to = c("mc:BAM", "mc:Met", "mc:Omni")),
+         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
+         flparam = paste(fl, shortparam, sep = "_"),
+         paramval = exp(paramval)) %>% 
+  # summary()
+  filter(fl %in% c("fl:BAM", "fl:Met"),
+         grepl("^logA0", paramname),
+         metric == "rrmse", paramname != "MISSING") %>% 
+  ggplot(aes(x = method, y = paramval)) +
+  geom_line(aes(color = case, 
+             group = paste0(case, paramname))) +
+  geom_point(aes(color = case)) +
+  geom_violin(fill = NA) +
+  facet_grid(flparam ~ mc, scales = "free") + 
+  # scale_y_continuous(name = NULL) +
+  scale_y_log10(name = NULL) +
+  scale_x_discrete(name = NULL) +
+  annotation_logticks(sides = "l") +
+  mytheme +
+  theme(legend.position = "none")
+
+ggsave("../graphs/slides/mcflo-A0-lineplots.png")
+
+```
 
 Better to compare A0 in relative terms. 
+
+This one shifts in log space:
+
+```{r, fig.width = 6, fig.height = 4, dpi = 300}
+
+paramdf_joined %>% 
+  mutate(method = factor(method, levels = c("stats", "optim")),
+         fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
+         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
+                              to = c("mc:BAM", "mc:Met", "mc:Omni")),
+         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
+         flparam = paste(fl, shortparam, sep = "_")) %>% 
+  filter(fl %in% c("fl:BAM", "fl:Met"),
+         metric == "rrmse",
+         grepl("logA0", paramname)) %>%
+  select(-result) %>% 
+  spread(key = method, value = paramval) %>% 
+  mutate(optim = exp(optim - stats), stats = 1) %>%
+  select(case, flparam, optim, stats, mc) %>% 
+  gather(key = method, value = rel_pval, -case, -mc, -flparam) %>% 
+  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  group_by(mc, method, flparam) %>% 
+  mutate(linegroup = 1:n()) %>% 
+  ggplot(aes(x = method, y = rel_pval)) +
+  geom_line(aes(color = case, 
+                group = linegroup)) + 
+  geom_point(aes(color = case)) + 
+  geom_violin(fill = NA) +
+  facet_grid(flparam ~ mc) + #, scales = "free") +
+  scale_y_log10(name = "A0 relative to truth") + 
+  scale_x_discrete(name = NULL) +
+  annotation_logticks(sides = "l") +
+  mytheme +
+  theme(legend.position = "none")
+
+
+ggsave("../graphs/slides/mcflo-relA0-lineplots.png")
+
+ggplotly()
+
+```
+
+This one is an honest relative comparison:
 
 ```{r}
 # logA0
@@ -270,9 +428,43 @@ paramdf_joined %>%
   ggplot(aes(x = case, y = abs(pct_chg), 
              group = paste0(case, paramname))) +
   geom_point() +
-  facet_grid(mc ~ fl) +
+  facet_grid(mc ~ fl, scales = "free_y") +
   scale_y_log10() +
   theme(axis.text.x = element_text(angle = 90)) +
   ylab("% difference (abs. val.)")
 ```
+
+### Why do stats and optim differ so much in so many cases?
+
+I need a dawg-like plot, annotated with different models for Manning n. 
+
+```{r}
+
+case1 <- "Ganges"
+fl1 <- "metroman"
+mc1 <- "metroman"
+
+matrow <- resultMatrix %>% 
+  filter(case == case1, fl == fl1, mc == mc1, metric == "rrmse")
+
+pars1 <- resultList[[matrow$msg[1]]]$params # stats
+pars2 <- resultList[[matrow$msg[2]]]$params # optim
+
+
+fun1 <- mc(fl(swotlist = reachdata[[case1]], method = fl1, gradient = FALSE), 
+           method = mc1, gradient = FALSE)
+
+errmat1 <- with(fun1(pars1), log(Q / Qhat))
+errmat2 <- with(fun1(pars2), log(Q / Qhat))
+
+```
+
+Hmm, I think I should leave this as a todo for now. Time to come up with some slides for tomorrow. Challenge is to:
+
+- Explain the problem, motivation
+- Explain the approach
+  - define mcflo, components
+  - Show matrix of analyses
+- Show results
+
 

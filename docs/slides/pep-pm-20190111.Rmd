@@ -1,0 +1,93 @@
+---
+title: "Pepsi 1.0 post-mortem"
+author: "Mark Hagemann"
+date: "November 6, 2018"
+output: 
+  ioslides_presentation:
+    incremental: true
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = FALSE, message = FALSE, cache = FALSE, 
+               fig.width = 6, fig.height = 4,
+               warning = FALSE)
+
+```
+
+```{r}
+pltly_dir <- "./plotly/"
+for (file in list.files(pltly_dir, full.names = TRUE)) {
+  load(file)
+}
+
+```
+
+
+## Problem, motivation
+
+- We've been applying mass-conserved flow laws to SWOT data
+- Pepsi challenges have show mixed performance for "inversions"
+- What's the deal?
+    - Hard to invert (get parameters right)?
+    - mass-conserved flow laws are bunk?
+    
+## Approach
+
+- Instead of "inverting", use "truth" (model boundary conditions, output) to get best parameters
+- "Best" parameters means:
+    - physically / statistically "correct" parameters ("stats" approach)
+    - parameters that give best performance metric ("optim" approach)
+- Using best parameters, how well do mass-conserved flow laws work?
+
+## Analysis
+
+Components:
+
+1. Flow law: MetroMan, BAM (both variants of Manning eqn), "omniscient"
+2. Mass conservation: MetroMan, BAM, "omniscient"
+3. Performance metric (nRMSE, rRMSE)
+    - Compose 1-3 into objective function for optimization
+4. dataset (Pepsi 1 cases except Tanana, St. Lawrence)
+5. Parameter selection method ("stats" or "optim")
+
+
+## Results
+
+```{r}
+include_graphics("../../graphs/slides/mcflo-res-boxplots.png", dpi = 220)
+```
+
+## Results
+
+```{r, fig.width = 8, fig.height=5.5}
+pltly1
+```
+
+
+## Parameters: Manning n
+
+```{r}
+include_graphics("../../graphs/slides/mcflo-param-lineplots.png", dpi = 220)
+```
+
+## Parameters: Manning n
+
+```{r, fig.width = 8, fig.height=5.5}
+pltly2
+```
+
+
+## Parameters: A0
+
+```{r}
+include_graphics("../../graphs/slides/mcflo-relA0-lineplots.png", dpi = 220)
+```
+
+## Parameters: A0
+
+```{r, fig.width = 8, fig.height=5.5}
+pltly3
+```
+
+
