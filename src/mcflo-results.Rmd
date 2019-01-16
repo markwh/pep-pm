@@ -145,18 +145,19 @@ slideresdf <- plotdata %>%
          mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
                               to = c("mc:BAM", "mc:Met", "mc:Omni")))
 
-# plotdata %>% 
-#   mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
-#                               to = c("fl:BAM", "fl:Met", "fl:Omni")),
-#          metric = plyr::mapvalues(metric, 
-#                                   from = c("nrmse", "rrmse"),
-#                                   to = c("nRMSE", "rRMSE")),
-#          mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
-#                               to = c("mc:BAM", "mc:Met", "mc:Omni"))) %>% 
+slideresdf <- plotdata %>%
+  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
+         metric = plyr::mapvalues(metric,
+                                  from = c("nrmse", "rrmse"),
+                                  to = c("nRMSE", "rRMSE")),
+         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
+                              to = c("mc:BAM", "mc:Met", "mc:Omni")))
+
 slideresgg <- ggplot(slideresdf, aes(x = fl, y = result, text = case)) + 
   # geom_line() +
-  geom_boxplot(aes(fill = mc), outlier.shape = NA) +
-  geom_point(aes(fill = mc), 
+  geom_boxplot(aes(fill = mc, group = paste0(mc, fl)), outlier.shape = NA) +
+  geom_point(aes(fill = mc, group = paste0(mc, fl)), 
              shape = 21, alpha = 0.6,
              position = position_jitterdodge(dodge.width = 0.75, 
                                              jitter.width = 0.1)) +
@@ -174,7 +175,8 @@ ggsave("../graphs/slides/mcflo-res-boxplots.png")
 
 slideresgg_plotly <- slideresgg
 slideresgg_plotly$layers <- slideresgg$layers[-1]
-ggplotly(slideresgg_plotly, tooltip = "text") # This one doesn't help much.
+pltly1 <- ggplotly(slideresgg_plotly, tooltip = "text")
+save(pltly1, file = "../docs/slides/plotly/slideres_plotly.RData")
 ```
 
 
@@ -319,7 +321,7 @@ slidepardf <- paramdf_joined %>%
          !grepl("^logA0", paramname),
          metric == "rrmse", paramname != "MISSING")
 
-slidepargg <- ggplot(slideresdf, aes(x = method, y = paramval)) +
+slidepargg <- ggplot(slidepardf, aes(x = method, y = paramval)) +
   geom_line(aes(color = case, 
              group = paste0(case, paramname))) +
   geom_point(aes(color = case)) +
@@ -332,7 +334,8 @@ slidepargg <- ggplot(slideresdf, aes(x = method, y = paramval)) +
 slidepargg
 ggsave("../graphs/slides/mcflo-param-lineplots.png")
 
-ggplotly(slidepargg)
+pltly2 <- ggplotly(slidepargg)
+save(pltly2, file = "../docs/slides/plotly/slidepars_plotly.RData")
 ```
 
 
@@ -373,7 +376,7 @@ This one shifts in log space:
 
 ```{r, fig.width = 6, fig.height = 4, dpi = 300}
 
-paramdf_joined %>% 
+sliderelA0df <- paramdf_joined %>% 
   mutate(method = factor(method, levels = c("stats", "optim")),
          fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
                               to = c("fl:BAM", "fl:Met", "fl:Omni")),
@@ -391,8 +394,9 @@ paramdf_joined %>%
   gather(key = method, value = rel_pval, -case, -mc, -flparam) %>% 
   mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
   group_by(mc, method, flparam) %>% 
-  mutate(linegroup = 1:n()) %>% 
-  ggplot(aes(x = method, y = rel_pval)) +
+  mutate(linegroup = 1:n())
+
+sliderelA0gg <- ggplot(sliderelA0df, aes(x = method, y = rel_pval)) +
   geom_line(aes(color = case, 
                 group = linegroup)) + 
   geom_point(aes(color = case)) + 
@@ -404,11 +408,11 @@ paramdf_joined %>%
   mytheme +
   theme(legend.position = "none")
 
-
+sliderelA0gg
 ggsave("../graphs/slides/mcflo-relA0-lineplots.png")
 
-ggplotly()
-
+pltly3 <- ggplotly(sliderelA0gg)
+save(pltly3, file = "../docs/slides/plotly/sliderelA0_plotly.RData")
 ```
 
 This one is an honest relative comparison:
