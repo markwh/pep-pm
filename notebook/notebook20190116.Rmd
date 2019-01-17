@@ -1,0 +1,35 @@
+---
+title: "notebook20190116"
+author: "Mark Hagemann"
+date: "January 16, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Modifying optimizations to do a "partial" optimization using real (nown) A0, unknown Manning parameters. 
+
+Here's copied from my regular work notes:
+
+I think it's easiest to add an argument to fl function factories that toggles A0 truth. 
+
+- OK, first crack at that is done. 
+- Next, make needed changes in wrapper function. DONE.
+- Finally, propagate real_A argument through starting at mcflob()
+
+(end copy)
+
+Time to test it out!
+
+```{r}
+testinps <- mcflo_inps(swotlist = reachdata$Ganges, fl = "metroman", 
+                       mc = "metroman", method = "part_optim", metric = "rrmse")
+
+testinps$p_stat
+testinps$f(params = testinps$p_stat)
+
+testoptim <- mcflo_optim(testinps, control = list(trace = 3))
+```
+

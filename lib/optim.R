@@ -129,13 +129,13 @@ fl_peek <- function(swotlist,
 mcflo_inps <- function(swotlist, 
                        fl = c("bam_man", "metroman", "omniscient"), 
                        mc = c("bam", "metroman", "omniscient"), 
-                       method = c("stats", "optim"),
+                       method = c("stats", "optim", "part_optim"),
                        metric = c("rrmse", "nrmse"),
                        msg = NA) {
   fl <- match.arg(fl)
   mc <- match.arg(mc)
   metric <- match.arg(metric)
-  # browser()
+
   # Purge NA's from swotlist
   ndat1 <- nrow(swotlist$W) * ncol(swotlist$W)
   swotlist <- swot_purge_nas(swotlist)
@@ -161,9 +161,24 @@ mcflo_inps <- function(swotlist,
     res$f <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
                     gradient = FALSE)
     res$g <- NULL
-  } else {
+  } else if (method == "part_optim") {
+    
     mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
-                    gradient = TRUE)
+                    real_A = TRUE, gradient = TRUE)
+    mcflo_mem <- memoise(mcflo)
+    
+    keeppars <- which(!grepl("^logA0", names(statparams)))
+    res$p_stat <- res$p_stat[keeppars]
+    res$f <- mcflo_mem
+    res$g <- function(params) attr(mcflo_mem(params), "gradient")
+    
+    mins <- rep(-Inf, length(keeppars))
+    
+    res$p_mins <- mins    
+    
+  } else if (method == "optim") {
+    mcflo <- mcflob(swotlist, mc = mc, fl = fl, ob = metric, 
+                    real_A = FALSE, gradient = TRUE)
     mcflo_mem <- memoise(mcflo)
     res$f <- mcflo_mem
     res$g <- function(params) attr(mcflo_mem(params), "gradient")
@@ -177,8 +192,6 @@ mcflo_inps <- function(swotlist,
     ns <- length(minA0)
     mins0 <- rep(-Inf, length(statparams) - ns)
     mins <- c(mins0, log(minA0) + 0.01) # More tolerance added here
-    
-    # Compile into a list to return
     
     res$p_mins <- mins    
   }
@@ -206,6 +219,10 @@ mcflo_optim <- function(inplist, timeout = 600, startparams = NULL, ...) {
   res$params <- resopt$par
   res$optim.info <- resopt
   
+  if (is.memoised(inplist$f)) {
+    forget(inplist$f)
+  }
+  
   res
 }
 
@@ -215,16 +232,17 @@ master_mcflo <- function(case,
                          fl = c("bam_man", "metroman", "omniscient"), 
                          mc = c("bam", "metroman", "omniscient"), 
                          metric = c("rrmse", "nrmse"), 
-                         method = c("stats", "optim"),
+                         method = c("stats", "optim", "part_optim"),
+                         area = c("unknown", "known"),
                          msg = NA, startparams = NULL,
                          timeout = 600,
                          ...) {
-  # browser()
-  
+
   fl <- match.arg(fl)
   mc <- match.arg(mc)
   metric <- match.arg(metric)
   method <- match.arg(method)
+  area <- match.arg(area)
   swotlist <- reachdata[[case]]
   
   optim_inps <- mcflo_inps(swotlist = swotlist, fl = fl, mc = mc, 
@@ -240,11 +258,10 @@ master_mcflo <- function(case,
     statparams <- optim_inps$p_stat
     res$metric <- as.numeric(optim_inps$f(statparams))
     res$params <- statparams
-  } else if (method == "optim") {
+  } else if (method %in% c("optim", "part_optim")) {
     res <- mcflo_optim(inplist = optim_inps, timeout = timeout, 
                        startparams = startparams, ...)
-    if (is.memoised(optim_inps$f)) forget(optim_inps$f)
-  }
+  } 
   
   res
 }

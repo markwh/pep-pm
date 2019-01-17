@@ -5,8 +5,6 @@
 
 # Matrix of inputs to run through master function -------------------------
 
-# Note: master function is now in optim.R.
-
 cases <- names(reachdata)
 cases <- cases[!grepl("^StLaw", cases)] # St Lawrence doesn't have A data
 cases <- cases[!grepl("^Tanana", cases)] # Tanana doesn't have A data either
@@ -14,7 +12,7 @@ cases <- cases[!grepl("^Tanana", cases)] # Tanana doesn't have A data either
 flow_laws <- c("bam_man", "metroman", "omniscient")
 mc_types <- c("bam", "metroman", "omniscient")
 metrics <- c("rrmse", "nrmse")
-methods <- c("stats", "optim")
+methods <- c("stats", "optim", "part_optim")
 
 inputMatrix <- expand.grid(cases, flow_laws, mc_types, metrics, methods, 
                            stringsAsFactors = FALSE, 
@@ -30,9 +28,9 @@ inputMatrix <- expand.grid(cases, flow_laws, mc_types, metrics, methods,
 torun <- 1:nrow(inputMatrix)
 
 resultList[torun] <- pmap(.l = inputMatrix[torun, ], #[-1:-342, ],
-                   .f = possibly(master_mcflo, otherwise = NA))
+                   .f = possibly(master_mcflo, otherwise = NA),
                    # .f = possibly(mmcflo2, otherwise = NA))
-                   # control = list(trace = NULL))
+                   control = list(trace = 3, maxit = 2000))
 cache("resultList")
 
 

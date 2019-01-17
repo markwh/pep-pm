@@ -4,15 +4,20 @@
 #' "params" argument is as follows:
 #' - "manning_bam": n, then A0_median
 #' - "metroman": a (vector), then b vector, then A0_median
+#' @param swotlist a list of SWOT observables
+#' @param method which flow-law to use
+#' @param real_A Use real bathymetry or take this as a parameter?
+#' @param gradient Return gradient with function value? 
 fl <- function(swotlist, 
                method = c("bam_man", "metroman", "bam_amhg", "omniscient"),
+               real_A = FALSE,
                gradient = TRUE) {
   method <- match.arg(method)
   
   if (method == "bam_man") {
-    out <- fl_bamman(swotlist, gradient = gradient)
+    out <- fl_bamman(swotlist, real_A = real_A, gradient = gradient)
   } else if (method == "metroman") {
-    out <- fl_mm(swotlist, gradient = gradient)
+    out <- fl_mm(swotlist, real_A = real_A, gradient = gradient)
   } else if (method == "bam_amhg") {
     stop("AMHG flow law not implemented")
   } else if (method == "omniscient") {
@@ -27,43 +32,53 @@ fl <- function(swotlist,
 #' Returns a function of paramaters, a vector of length n_s + 1, with the first 
 #' element being logn, the remaining elements as log(A_0) (median-referenced)
 #' 
-fl_bamman <- function(swotlist, gradient = TRUE) {
+fl_bamman <- function(swotlist, real_A = FALSE, gradient = TRUE) {
   logW <- log(swotlist$W)
   logS <- log(swotlist$S)
-  # browser()
   sum(is.na(logS))
-  # print(min(logS))
   dA <- swotlist$dA
+  
+  ns <- nrow(dA)
+  nt <- ncol(dA)
 
     
   out <- function(params) {
-    # browser()
     logn <- params[1]
-    A0_med <- exp(params[-1])
-    # if (length(A0_med) != nrow(dA)) browser()
-    Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
-    logA <- log(Amat)
     
+    if (real_A) {
+      Amat <- swotlist$A
+    } else {
+      A0_med <- exp(params[-1])
+      Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
+    }
+    
+    logA <- log(Amat)
     logQ <- -2/3 * logW + 1/2 * logS + 5/3 * logA - logn
     
     outlist <- swotlist
-    outlist$Ahat <- Amat
+    outlist$Ahat <- Amat # Could be misleading: this is exactly swotlist$A when real_A == TRUE
     Qhat_new <- exp(logQ)
     outlist$Qhat <- Qhat_new
     
     if (gradient) {
       # Gradient-------------------------------------------------------------
       dqdlogn <- -as.vector(Qhat_new)
-      logA0 <- params[-1]
-      A0mat <- swot_vec2mat(exp(logA0), Qhat_new)
-      dqdlogA <- 5/3 * Qhat_new / Amat * A0mat
       
-      # need a permutation matrix.
-      diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Amat), 
-                            simplify = FALSE)
-      permmat <- Matrix(Reduce(diagmats, f = cbind))
-      dlogAmat <- permmat %*% Diagonal(x = as.vector(dqdlogA))
-      gradmat <- rbind(dqdlogn, dlogAmat)
+      if (real_A) {
+        gradmat <- matrix(dqdlogn, nrow = 1)
+        
+      } else {
+        logA0 <- params[-1]
+        A0mat <- swot_vec2mat(exp(logA0), Qhat_new)
+        dqdlogA <- 5/3 * Qhat_new / Amat * A0mat
+        
+        # need a permutation matrix.
+        diagmats <- replicate(diag(1, nr = ns), n = nt, 
+                              simplify = FALSE)
+        permmat <- Matrix(Reduce(diagmats, f = cbind))
+        dlogAmat <- permmat %*% Diagonal(x = as.vector(dqdlogA))
+        gradmat <- rbind(dqdlogn, dlogAmat)
+      }
       
       attr(outlist, "gradient") <- gradmat
     }
@@ -77,21 +92,26 @@ fl_bamman <- function(swotlist, gradient = TRUE) {
 #' 
 #' Implements a power-law for Manning's n based on depth (A / W)
 
-fl_mm <- function(swotlist, gradient = TRUE) {
+fl_mm <- function(swotlist, real_A = FALSE, gradient = TRUE) {
   logW <- log(swotlist$W)
   logS <- log(swotlist$S)
   dA <- swotlist$dA
-  
+  ns <- nrow(logW)
+  nt <- ncol(logW)
   
   out <- function(params) {
-    ns <- nrow(logW)
     a <- params[1:ns]
     b <- params[ns + (1:ns)]
     bmat <- swot_vec2mat(b, logW)
-    logA0 <- params[-1:(-2 * ns)]
-    A0_med <- exp(logA0)
-    Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
-    # print(min(Amat))
+    
+    if (real_A) {
+      Amat <- swotlist$A
+    } else {
+      logA0 <- params[-1:(-2 * ns)]
+      A0_med <- exp(logA0)
+      Amat <- swot_A(A0vec = A0_med, dAmat = dA, zero = "median")
+    }
+    
     logA <- log(Amat)
     logD <- logA - logW
     logn <- swot_vec2mat(a, logW) + bmat * logD
@@ -105,19 +125,29 @@ fl_mm <- function(swotlist, gradient = TRUE) {
     
     if (gradient) {
       # Gradient-------------------------------------------------------------
-      dqda <- -as.vector(Qhat_new)
-      dqdb <- dqda * as.vector((logA - logW))
-      A0mat <- swot_vec2mat(A0_med, logW)
-      dqdlogA <- (5 - 3 * bmat)/(3 * Amat) * Qhat_new * A0mat
-      
       # need a permutation matrix.
-      diagmats <- replicate(diag(1, nr = length(logA0)), n = ncol(Amat), 
+      diagmats <- replicate(diag(1, nr = ns), n = nt, 
                             simplify = FALSE)
       permmat <- Matrix(Reduce(diagmats, f = cbind))
-      dlogAmat <- permmat %*% Diagonal(x = as.vector(dqdlogA))
+      
+      # MetroMan parameters
+      dqda <- -as.vector(Qhat_new)
+      dqdb <- dqda * as.vector((logA - logW))
+      
       damat <- permmat %*% Diagonal(x = dqda)
       dbmat <- permmat %*% Diagonal(x = dqdb)
-      gradmat <- rbind(damat, dbmat, dlogAmat)
+      
+      # A0 parameters (potentially)
+      if (real_A) {
+        gradmat <- rbind(damat, dbmat)
+        
+      } else {
+        A0mat <- swot_vec2mat(A0_med, logW)
+        dqdlogA <- (5 - 3 * bmat)/(3 * Amat) * Qhat_new * A0mat
+        dlogAmat <- permmat %*% Diagonal(x = as.vector(dqdlogA))
+        
+        gradmat <- rbind(damat, dbmat, dlogAmat)
+      }
       
       attr(outlist, "gradient") <- gradmat
     }
@@ -319,12 +349,14 @@ mcflob <- function(swotlist,
                    mc = c("bam", "metroman", "median", "mean", "omniscient"),
                    fl = c("bam_man", "metroman", "bam_amhg", "omniscient"),
                    ob = c("rrmse", "nrmse"),
+                   real_A = FALSE,
                    gradient = TRUE) {
   fl_method <- match.arg(fl)
   mc_method <- match.arg(mc)
   ob <- match.arg(ob)
   
-  flfun <- fl(swotlist, method = fl_method, gradient = gradient)  # flow law
+  flfun <- fl(swotlist, method = fl_method, 
+              real_A = real_A, gradient = gradient)  # flow law
   mcflfun <- mc(flfun, method = mc_method, gradient = gradient) # mass-conserved flow law
   omcflfun <- metric(mcflfun, method = ob, gradient = gradient)
   
