@@ -33,3 +33,20 @@ testinps$f(params = testinps$p_stat)
 testoptim <- mcflo_optim(testinps, control = list(trace = 3))
 ```
 
+OK, that's worked but how come convgvec has more NA's (486) than it should (480)?
+
+```{r}
+should_na <- with(inputMatrix, fl == "omniscient" | method == "stats")
+
+tocheck <- which(!should_na & is.na(convgvec))
+
+resultVec[tocheck]
+resultList[tocheck]
+
+inputMatrix[tocheck, ]
+
+
+```
+
+
+Redo these and observe. 

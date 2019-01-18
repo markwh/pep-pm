@@ -171,6 +171,7 @@ slideresgg <- ggplot(slideresdf, aes(x = fl, y = result, text = case)) +
 
 
 slideresgg
+
 ggsave("../graphs/slides/mcflo-res-boxplots.png")
 
 slideresgg_plotly <- slideresgg
@@ -199,34 +200,26 @@ Next inspect the difference between "optim" and "stats" parameters.
 Since many optimized parameters don't come with parameter names, I'll need to put these in ex-post.
 
 ```{r}
-pnamefun <- function(fl, nparams) {
-  if (nparams < 3) return(rep("MISSING", nparams))
-  if (fl == "bam_man") {
-    ns <- nparams - 1
-    pnames <- c("logn", paste0("logA0_", 1:ns))
-  } else if (fl == "metroman") {
-    ns <- nparams / 3
-    pnames <- c(paste0("a_", 1:ns), 
-                paste0("b_", 1:ns),
-                paste0("logA0_", 1:ns))
-  } else {
-    pnames <- NULL
-  }
-  pnames
-}
 
-paramlist <- resultList %>% 
-  map(possibly(~.$params, otherwise = c("MISSING" = NA)))
+# Need to get a data.frame with:
+# - case
+# - 
+# - parameter name
+# - parameter value
 
-paramlens <- map_int(paramlist, length)
+paramdf <- resultList %>% 
+  map(~data.frame(pname = names(.$params), value = .$params,
+                  stringsAsFactors = FALSE)) %>% 
+  bind_rows(.id = "listid") %>% 
+  mutate(param = markstats::splitPiece(pname, "_", 1),
+         listid = as.numeric(listid),
+         locid = as.numeric(markstats::splitPiece(pname, "_", 2))) %>% 
+  left_join(mutate(resultMatrix, listid = msg)) %>% 
+  select(pname, value, param, locid, case, fl, mc, metric, method) %>% 
+  spread(key = method, value = value) %>% 
+  mutate(part_optim = ifelse(param == "logA0", stats, part_optim)) 
 
-pnamelist <- map2(resultMatrix$fl[paramlens > 0], paramlens[paramlens > 0],
-                  pnamefun)
-
-paramdfs_tojoin0 <- paramlist[paramlens > 0] %>% 
-  map2(pnamelist, ~data.frame(paramval = .x, 
-                              paramname = .y, stringsAsFactors = FALSE))
-
+# TODO: make remaining paramdf_joined modifications to match earlier version
 
 paramdf_joined <- map2(paramdfs_tojoin0,
                        split(resultMatrix, f = 1:nrow(resultMatrix))[paramlens > 0],

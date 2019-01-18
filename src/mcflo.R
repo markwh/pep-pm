@@ -36,7 +36,8 @@ cache("resultList")
 
 # manually redo bad optimizations
 
-toredo <- which(convgvec == 1)
+# toredo <- which(convgvec == 1)
+toredo <- tocheck # from notebook20190116.Rmd
 # toredo <- which(failureVec)
 # toredo <- 579
 
@@ -63,6 +64,7 @@ for (ind in toredo) {
                             args = append(as.list(inputMatrix[ind, ]), 
                               values = list(
                                 startparams = startpars,
+                                timeout = 3600,
                                 control = list(trace = 3, maxit = 500))))
 }
 
