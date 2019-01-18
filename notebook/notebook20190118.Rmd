@@ -1,0 +1,124 @@
+---
+title: "notebook20190118"
+author: "Mark Hagemann"
+date: "January 18, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I just finished recreating result plots including partial optimization, and the MetroMan results are weird! I need a way to plot logn vs log(A/W) with both closure (points) and MetroMan modeled n (lines) for a given:
+
+1. case (swotlist)
+2. A0 vector --> A  matrix (creates closure)
+3. a, b vectors (creates MetroMan modeled n)
+
+Relevant info is stored in: reachdata (1, 2)
+
+Can I use mc(fl())(params)?
+
+- Gives a swotlist including Ahat
+- params will include a, b
+- Looks good, give it a shot.
+
+```{r}
+testmcfl <- mc(fl(reachdata$Ganges, method = "metroman", 
+                  real_A = TRUE, gradient = FALSE), 
+               method = "bam", gradient = FALSE)
+
+matrow <- resultMatrix %>% 
+  filter(case == "Ganges", fl == "metroman", mc == "bam", 
+         method == "part_optim", metric == "nrmse")
+
+testpars <- resultList[[matrow$msg]]$params
+
+testres <- testmcfl(testpars)
+
+plot_DAWG(testres$Ahat - testres$A)
+
+testclos <- with(testres, 5/3 * log(Ahat) + 1/2 * log(S) - 2/3 * log(W) - log(Q))
+
+testlogd <- with(testres, log(Ahat) - log(W))
+
+plot_DAWG(testclos)
+
+ndplotdf <- swot_tidy(list(logn = testclos, logd = testlogd)) %>% 
+  mutate(loc = as.factor(loc))
+
+abdf <- data.frame(parname = names(testpars),
+                   parval = unname(testpars),
+                   stringsAsFactors = FALSE) %>% 
+  mutate(param = splitPiece(parname, "_", 1),
+         loc = splitPiece(parname, "_", 2)) %>% 
+  select(-parname) %>% 
+  spread(key = param, value = parval)
+
+ndplotdf <- swot_tidy(list(logn = testclos, logd = testlogd)) %>% 
+  mutate(loc = as.factor(loc)) %>% 
+  left_join(abdf, by = "loc") %>% 
+  mutate(logn_hat = a + b * logd)
+
+closlist <- swot_untidy(ndplotdf)
+plot_DAWG(closlist$logn_hat)
+
+ggplot(ndplotdf, aes(x = logd, y = logn)) + 
+  geom_point(aes(group = loc, color = loc)) +
+  # geom_abline(aes(group = loc, color = loc, slope = b, intercept = a),
+              # data = abdf)
+  geom_line(aes(y = logn_hat, group = loc, color = loc))
+
+
+ggplot() + 
+  geom_abline(aes(group = loc, color = loc, slope = b, intercept = a),
+              data = abdf) +
+  geom_point(aes(x = logd, y = logn, group = loc, color = loc), data = ndplotdf) +
+  xlim(0, 20) + ylim(-10, 10)
+  
+```
+
+
+Hmmmm... Well I'll have to pick up on this later. 
+
+
+May be useful to have a "closure" plot alongside, showing points and modeled logn. 
+
+
+Can I calculate metrics from closure term?
+
+- Not directly, but partly. 
+
+```{r}
+
+# swotlist must have a "Ahat" component
+# log_clos is log-transformed closure matrix
+qhat_from_clos <- function(swotlist, log_clos) {
+  logA <- log(swotlist$Ahat)
+  logS <- log(swotlist$S)
+  logW <- log(swotlist$W)
+  logqhat <- 5/3 * logA + 1/2 * logS - 2/3 * logW - log_clos
+  
+  logqhat
+}
+
+testqhat <- qhat_from_clos(testres, closlist$logn_hat)
+
+plot_DAWG(testqhat)
+
+testmcflo <- metric(mc(fl(reachdata$Ganges, method = "metroman", 
+                          real_A = TRUE, gradient = FALSE), 
+                      method = "metroman", gradient = FALSE),
+                   method = "rrmse", gradient = FALSE)
+foo <- testmcfl(testpars)
+plot_DAWG(foo$Qhat)
+plot_DAWG(foo$Qhat_fl)
+
+plot(apply(foo$Qhat_fl, 2, geomMean), type = "l")
+
+
+testmcflo(testpars)
+```
+
+I may have to put some constraint on the optimization.
+

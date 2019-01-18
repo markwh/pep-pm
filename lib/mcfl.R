@@ -100,9 +100,10 @@ fl_mm <- function(swotlist, real_A = FALSE, gradient = TRUE) {
   nt <- ncol(logW)
   
   out <- function(params) {
-    a <- params[1:ns]
-    b <- params[ns + (1:ns)]
+    a <- params[1:ns] # intercept in log space
+    b <- params[ns + (1:ns)] # slope in log space
     bmat <- swot_vec2mat(b, logW)
+    
     
     if (real_A) {
       Amat <- swotlist$A
@@ -121,6 +122,7 @@ fl_mm <- function(swotlist, real_A = FALSE, gradient = TRUE) {
     outlist <- swotlist
     outlist$Ahat <- Amat
     Qhat_new <- exp(logQ)
+    outlist$Qhat_fl <- Qhat_new
     outlist$Qhat <- Qhat_new
     
     if (gradient) {

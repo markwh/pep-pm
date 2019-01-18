@@ -41,7 +41,7 @@ Plot improvement of optimization over stats-based parameters.
 library(plotly)
 gg1 <- resultMatrix %>% 
   na.omit() %>% 
-  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
+  mutate(method = factor(method, levels = c("stats", "part_optim", "optim"))) %>% 
   ggplot(aes(x = method, y = result, color = fl, linetype = mc)) + 
   geom_line(aes(group = paste0(case, fl, mc), text = case)) + 
   # scale_linetype_discrete(guide = FALSE) +
@@ -78,13 +78,18 @@ resultMatrix %>%
 Now mass-conservation
 
 ```{r}
-resultMatrix %>% 
+
+
+gg2 <- resultMatrix %>% 
   filter(mc != "omniscient", fl == "omniscient", method == "stats") %>% 
-  glimpse() %>% 
   ggplot(aes(x = mc, y = result, group = case)) + 
   geom_point() +
   geom_line() +
   facet_wrap(~metric, nrow = 2)
+
+gg2
+
+gg2 + scale_y_log10()
 ```
 
 
@@ -172,12 +177,12 @@ slideresgg <- ggplot(slideresdf, aes(x = fl, y = result, text = case)) +
 
 slideresgg
 
-ggsave("../graphs/slides/mcflo-res-boxplots.png")
+ggsave("graphs/slides/mcflo-res-boxplots.png")
 
 slideresgg_plotly <- slideresgg
 slideresgg_plotly$layers <- slideresgg$layers[-1]
 pltly1 <- ggplotly(slideresgg_plotly, tooltip = "text")
-save(pltly1, file = "../docs/slides/plotly/slideres_plotly.RData")
+save(pltly1, file = "docs/slides/plotly/slideres_plotly.RData")
 ```
 
 
@@ -201,32 +206,20 @@ Since many optimized parameters don't come with parameter names, I'll need to pu
 
 ```{r}
 
-# Need to get a data.frame with:
-# - case
-# - 
-# - parameter name
-# - parameter value
-
-paramdf <- resultList %>% 
-  map(~data.frame(pname = names(.$params), value = .$params,
+paramdf_joined <- resultList %>% 
+  map(~data.frame(paramname = names(.$params), value = .$params,
                   stringsAsFactors = FALSE)) %>% 
   bind_rows(.id = "listid") %>% 
-  mutate(param = markstats::splitPiece(pname, "_", 1),
+  mutate(param = splitPiece(paramname, "_", 1),
          listid = as.numeric(listid),
-         locid = as.numeric(markstats::splitPiece(pname, "_", 2))) %>% 
-  left_join(mutate(resultMatrix, listid = msg)) %>% 
-  select(pname, value, param, locid, case, fl, mc, metric, method) %>% 
+         locid = as.numeric(splitPiece(paramname, "_", 2))) %>% 
+  left_join(mutate(resultMatrix, listid = msg), by = "listid") %>% 
+  select(paramname, value, param, locid, case, fl, mc, metric, method) %>% 
   spread(key = method, value = value) %>% 
-  mutate(part_optim = ifelse(param == "logA0", stats, part_optim)) 
+  mutate(part_optim = ifelse(param == "logA0", stats, part_optim)) %>% 
+  gather(key = method, value = paramval, -paramname:-metric) %>% 
+  mutate(method = factor(method, levels = c("stats", "part_optim", "optim")))
 
-# TODO: make remaining paramdf_joined modifications to match earlier version
-
-paramdf_joined <- map2(paramdfs_tojoin0,
-                       split(resultMatrix, f = 1:nrow(resultMatrix))[paramlens > 0],
-                       ~mutate(.x, fl = .y$fl, mc = .y$mc, method = .y$method,
-                               result = .y$result,
-                               metric = .y$metric, case = .y$case)) %>% 
-  bind_rows()
 ```
 
 Make the plots
@@ -235,7 +228,6 @@ Make the plots
 
 # logA0
 paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
   filter(fl %in% c("bam_man", "metroman"),
          metric == "rrmse",
          grepl("logA0", paramname)) %>% 
@@ -247,7 +239,6 @@ paramdf_joined %>%
 
 # logn
 paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
   filter(fl %in% c("bam_man"),
          metric == "rrmse",
          grepl("logn", paramname)) %>% 
@@ -258,7 +249,6 @@ paramdf_joined %>%
 
 # MetroMan slope
 paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
   filter(fl %in% c("metroman"),
          metric == "rrmse",
          grepl("^a_", paramname)) %>% 
@@ -269,7 +259,6 @@ paramdf_joined %>%
 
 # MetroMan intercept
 paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim"))) %>% 
   filter(fl %in% c("metroman"),
          metric == "rrmse",
          grepl("^b_", paramname)) %>% 
@@ -285,9 +274,7 @@ Try combining all these
 
 ```{r, fig.width=6, fig.height=7.5}
 paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim")),
-         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
-         flparam = paste(shortparam, fl, sep = "_")) %>% 
+  mutate(flparam = paste(param, fl, sep = "_")) %>% 
   filter(fl %in% c("bam_man", "metroman"),
          metric == "rrmse", paramname != "MISSING") %>% 
   ggplot(aes(x = method, y = paramval)) +
@@ -302,13 +289,11 @@ Pared down version for slides.
 
 ```{r, fig.width = 6, fig.height = 4, dpi = 300}
 slidepardf <- paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim")),
-         fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
                               to = c("fl:BAM", "fl:Met", "fl:Omni")),
          mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
                               to = c("mc:BAM", "mc:Met", "mc:Omni")),
-         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
-         flparam = paste(fl, shortparam, sep = "_")) %>% 
+         flparam = paste(fl, param, sep = "_")) %>% 
   # summary()
   filter(fl %in% c("fl:BAM", "fl:Met"),
          !grepl("^logA0", paramname),
@@ -325,22 +310,20 @@ slidepargg <- ggplot(slidepardf, aes(x = method, y = paramval)) +
   mytheme +
   theme(legend.position = "none")
 slidepargg
-ggsave("../graphs/slides/mcflo-param-lineplots.png")
+ggsave("graphs/slides/mcflo-param-lineplots.png")
 
 pltly2 <- ggplotly(slidepargg)
-save(pltly2, file = "../docs/slides/plotly/slidepars_plotly.RData")
+save(pltly2, file = "docs/slides/plotly/slidepars_plotly.RData")
 ```
 
 
 ```{r, fig.width = 6, fig.height = 4, dpi = 300}
 paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim")),
-         fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
                               to = c("fl:BAM", "fl:Met", "fl:Omni")),
          mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
                               to = c("mc:BAM", "mc:Met", "mc:Omni")),
-         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
-         flparam = paste(fl, shortparam, sep = "_"),
+         flparam = paste(fl, param, sep = "_"),
          paramval = exp(paramval)) %>% 
   # summary()
   filter(fl %in% c("fl:BAM", "fl:Met"),
@@ -359,7 +342,7 @@ paramdf_joined %>%
   mytheme +
   theme(legend.position = "none")
 
-ggsave("../graphs/slides/mcflo-A0-lineplots.png")
+ggsave("graphs/slides/mcflo-A0-lineplots.png")
 
 ```
 
@@ -370,17 +353,14 @@ This one shifts in log space:
 ```{r, fig.width = 6, fig.height = 4, dpi = 300}
 
 sliderelA0df <- paramdf_joined %>% 
-  mutate(method = factor(method, levels = c("stats", "optim")),
-         fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
-                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
+  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman"),#, "omniscient"),
+                              to = c("fl:BAM", "fl:Met")), #, "fl:Omni")),
          mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
                               to = c("mc:BAM", "mc:Met", "mc:Omni")),
-         shortparam = markstats::splitPiece(paramname, split = "_", piece = 1),
-         flparam = paste(fl, shortparam, sep = "_")) %>% 
+         flparam = paste(fl, param, sep = "_")) %>% 
   filter(fl %in% c("fl:BAM", "fl:Met"),
          metric == "rrmse",
          grepl("logA0", paramname)) %>%
-  select(-result) %>% 
   spread(key = method, value = paramval) %>% 
   mutate(optim = exp(optim - stats), stats = 1) %>%
   select(case, flparam, optim, stats, mc) %>% 
@@ -402,10 +382,10 @@ sliderelA0gg <- ggplot(sliderelA0df, aes(x = method, y = rel_pval)) +
   theme(legend.position = "none")
 
 sliderelA0gg
-ggsave("../graphs/slides/mcflo-relA0-lineplots.png")
+ggsave("graphs/slides/mcflo-relA0-lineplots.png")
 
 pltly3 <- ggplotly(sliderelA0gg)
-save(pltly3, file = "../docs/slides/plotly/sliderelA0_plotly.RData")
+save(pltly3, file = "docs/slides/plotly/sliderelA0_plotly.RData")
 ```
 
 This one is an honest relative comparison:
@@ -417,7 +397,6 @@ paramdf_joined %>%
   filter(fl %in% c("bam_man", "metroman"),
          metric == "rrmse",
          grepl("logA0", paramname)) %>%
-  select(-result) %>% 
   spread(key = method, value = paramval) %>% 
   mutate(pct_chg = (exp(optim) - exp(stats)) / exp(stats) * 100) %>% 
   # filter(pct_chg < 1000000) %>% 
