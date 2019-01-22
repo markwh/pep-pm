@@ -1,0 +1,151 @@
+---
+title: "Pepsi 1.0 post-mortem"
+author: "Mark Hagemann"
+date: "November 6, 2018"
+output: 
+  ioslides_presentation:
+    incremental: true
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = FALSE, message = FALSE, cache = FALSE, 
+               fig.width = 6, fig.height = 4,
+               warning = FALSE)
+opts_knit$set(root.dir = "../..")
+```
+
+```{r}
+library(ProjectTemplate)
+load.project()
+pltly_dir <- "./plotly/"
+for (file in list.files(pltly_dir, full.names = TRUE)) {
+  load(file)
+}
+
+include_graphics <- function(path, 
+                             auto_pdf = getOption("knitr.graphics.auto_pdf", 
+                                                  FALSE), 
+                             dpi = NULL) {
+  path0 <- getwd()
+  path <- paste(path0, path, sep = "/")
+  
+  knitr::include_graphics(path = path, auto_pdf = auto_pdf, dpi = dpi)
+}
+
+```
+
+## REcall the approach
+
+(flow law) + (mass conservation) + (performance metric) = **objective function**
+
+- different variants of each of the parentheticals
+- Do this for each of 16 Pepsi 1 cases --> 432 optimizations
+
+
+## Recall this nice result
+
+```{r}
+include_graphics("graphs/slides/mcflo-res-boxplots.png", dpi = 220)
+```
+
+## Problem
+
+Mass-conservation can make a nice result out of nonsensical flow-law output
+
+## Problem
+
+Look at Ganges for Metroman flow-law, BAM mass-conservation (geometric mean)
+
+Mass-conserved flow law:
+
+
+```{r}
+testmcfl <- mc(fl(reachdata$Ganges, method = "metroman", 
+                  real_A = TRUE, gradient = FALSE), 
+               method = "bam", gradient = FALSE)
+
+matrow <- resultMatrix %>% 
+  filter(case == "Ganges", fl == "metroman", mc == "bam", 
+         method == "part_optim", metric == "nrmse")
+
+testpars <- resultList[[matrow$msg]]$params
+
+# foo_omni <- testmcfl(testpars_omni)
+foo <- testmcfl(testpars)
+
+plot_DAWG(foo$Qhat)
+```
+
+## Problem
+
+Look at Ganges for Metroman flow-law, BAM mass-conservation (geometric mean)
+
+Raw flow law (no mass-conservation). Note log scale!
+
+
+```{r}
+plot_DAWG(foo$Qhat_fl) + scale_y_log10() + annotation_logticks(sides = "l")
+```
+
+## Solution
+
+**only use "omniscient" mc method**
+
+- Optimize parameters at each individual location, before invoking mass-conservation
+
+## Old results
+
+```{r}
+include_graphics("graphs/slides/mcflo-res-boxplots.png", dpi = 220)
+```
+
+
+## New results
+
+```{r}
+include_graphics("graphs/slides/mcflo-omni-res-boxplots.png", dpi = 220)
+```
+
+
+## Compare old to new
+
+```{r}
+plot(resultMatrix$result, resultMatrix_omni$result, xlab = "old version metric", ylab = "new version metric")
+```
+
+
+## Old flow-law output
+
+
+```{r}
+testmcfl <- mc(fl(reachdata$Ganges, method = "metroman", 
+                  real_A = TRUE, gradient = FALSE), 
+               method = "bam", gradient = FALSE)
+
+matrow <- resultMatrix %>% 
+  filter(case == "Ganges", fl == "metroman", mc == "bam", 
+         method == "part_optim", metric == "nrmse")
+
+testpars <- resultList[[matrow$msg]]$params
+
+# foo_omni <- testmcfl(testpars_omni)
+foo <- testmcfl(testpars)
+
+plot_DAWG(foo$Qhat_fl) 
+```
+
+(no log-scale this time, but same data as slide 6)
+
+## New flow-law output
+
+```{r}
+testind_omni <- matchmat_omni$omnirow[which(matchmat_omni$origrow == matrow$msg)]
+testpars_omni <- resultList[[testind_omni]]$params
+
+
+foo_omni <- testmcfl(testpars_omni)
+
+plot_DAWG(foo_omni$Qhat_fl)
+```
+

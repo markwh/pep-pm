@@ -1,4 +1,4 @@
----
+  ---
 title: "notebook20190118"
 author: "Mark Hagemann"
 date: "January 18, 2019"
@@ -113,6 +113,7 @@ testmcflo <- metric(mc(fl(reachdata$Ganges, method = "metroman",
 foo <- testmcfl(testpars)
 plot_DAWG(foo$Qhat)
 plot_DAWG(foo$Qhat_fl)
+plot_DAWG(foo$Qhat_fl) + scale_y_log10()
 
 plot(apply(foo$Qhat_fl, 2, geomMean), type = "l")
 
@@ -122,3 +123,148 @@ testmcflo(testpars)
 
 I may have to put some constraint on the optimization.
 
+
+### Picking up on 1/22
+
+Rather than constrain the optimization, first I should start by working with "omniscient" mc method's pararmeters, and running those through the mcflo. 
+
+- Make sure not to overwrite previous results--they are interesting, and not "incorrect".
+
+- First get a list of mcflo functions.
+    - use `mcflo_inps()` as in `master_mcflo`
+
+```{r}
+
+inp_wrapper <- function(case, 
+                 fl = c("bam_man", "metroman", "omniscient"), 
+                 mc = c("bam", "metroman", "omniscient"), 
+                 metric = c("rrmse", "nrmse"), 
+                 method = c("stats", "optim", "part_optim"),
+                 area = c("unknown", "known"),
+                 msg = NA, startparams = NULL,
+                 timeout = 600,
+                 ...) {
+
+  fl <- match.arg(fl)
+  mc <- match.arg(mc)
+  metric <- match.arg(metric)
+  method <- match.arg(method)
+  area <- match.arg(area)
+  swotlist <- reachdata[[case]]
+  
+  optim_inps <- mcflo_inps(swotlist = swotlist, fl = fl, mc = mc, 
+                           method = method, metric = metric, msg = msg)
+  
+  optim_inps
+}
+
+
+funlist <- list()
+for (i in 1:nrow(resultMatrix)) {
+  # cat(i)
+  argrow <- resultMatrix[i, ]
+  funlist[[i]] <- with(argrow, inp_wrapper(
+    case = case, fl = fl, mc = mc, metric = metric, 
+    method = method, msg = msg
+  ))$f
+}
+```
+
+Now I need to make a new resultList, using only the omnisicient parameters. 
+
+```{r}
+omnirows <- which(resultMatrix$mc == "omniscient")
+
+# I need a table for matching non-omnisicient parameters to omniscient parameters
+
+omnimat <- resultMatrix %>% 
+  filter(mc == "omniscient") %>% 
+  mutate(omnirow = msg) %>% 
+  select(case:method, -mc, omnirow)
+
+matchmat <- resultMatrix %>% 
+  mutate(origrow = msg) %>% 
+  select(case:method, origrow) %>% 
+  left_join(omnimat)
+
+# Get result from funlist[[origrow]], using parameters from resultList[[omnirow]]
+
+resultList_omni <- list()
+for (i in 1:nrow(matchmat)) {
+  cat(i, " ")
+  origi <- matchmat[i, "origrow"]
+  omnii <- matchmat[i, "omnirow"]
+  funi <- funlist[[origi]]
+  paramsi <- resultList[[omnii]]$params
+  resultList_omni[[i]] <- funi(paramsi)
+}
+
+resultVec_omni <- unlist(resultList_omni)
+
+summary(resultVec_omni)
+
+```
+
+Get a plot out of this. 
+
+```{r}
+plot(resultVec - resultVec_omni)
+```
+
+
+```{r}
+
+plotdata <- resultMatrix %>%
+  mutate(result = resultVec_omni)
+
+plotdata %>% 
+  ggplot(aes(x = fl, y = result)) + 
+  # geom_line() +
+  geom_boxplot(aes(fill = mc), outlier.shape = NA) +
+  geom_point(aes(fill = mc), 
+             shape = 21, alpha = 0.6,
+             position = position_jitterdodge(dodge.width = 0.75, 
+                                             jitter.width = 0.1)) +
+  geom_hline(yintercept = 0.35, linetype = 2) +
+  facet_grid(metric ~ method, scales = "free_y") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+# log-transformed version
+plotdata %>% 
+  filter(result > 1e-9) %>% # for log scale
+  ggplot(aes(x = fl, y = result)) + 
+  # geom_line() +
+  geom_boxplot(aes(fill = mc), outlier.shape = NA) +
+  geom_point(aes(fill = mc), 
+             shape = 21, alpha = 0.6,
+             position = position_jitterdodge(dodge.width = 0.75, 
+                                             jitter.width = 0.1)) +
+  facet_grid(metric ~ method) +
+  theme_bw() +
+  scale_y_log10(limits = c(0.001, 1)) +
+  annotation_logticks(sides = "l") +
+  theme(legend.position = "bottom")
+```
+
+Make sure the qhat looks better now.
+
+```{r}
+testind_omni <- matchmat$omnirow[which(matchmat$origrow == matrow$msg)]
+testpars_omni <- resultList[[testind_omni]]$params
+
+
+foo_omni <- testmcfl(testpars_omni)
+foo <- testmcfl(testpars)
+
+plot_DAWG(foo_omni$Qhat)
+plot_DAWG(foo_omni$Qhat_fl)
+
+```
+
+Time to package this up. 
+
+- Make a new src/ script for omniscient mc analysis DONE
+- cache relevant objects (possibly renamed) DONE
+- Make a new docs/slides deck including the above plots. DONE
+- Add a section to src/mcflo-results.Rmd with the above plots. DONE
