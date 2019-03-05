@@ -142,15 +142,6 @@ mytheme <- theme_bw() +
     # text = element_text(size = 15)
     )
 
-slideresdf <- plotdata %>% 
-  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
-                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
-         metric = plyr::mapvalues(metric, 
-                                  from = c("nrmse", "rrmse"),
-                                  to = c("nRMSE", "rRMSE")),
-         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
-                              to = c("mc:BAM", "mc:Met", "mc:Omni")))
-
 slideresdf <- plotdata %>%
   mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
                               to = c("fl:BAM", "fl:Met", "fl:Omni")),
@@ -178,26 +169,17 @@ slideresgg <- ggplot(slideresdf, aes(x = fl, y = result, text = case)) +
 
 slideresgg
 
-ggsave("../graphs/slides/mcflo-res-boxplots.png")
+ggsave("graphs/slides/mcflo-res-boxplots.png")
 
 slideresgg_plotly <- slideresgg
 slideresgg_plotly$layers <- slideresgg$layers[-1]
 pltly1 <- ggplotly(slideresgg_plotly, tooltip = "text")
-save(pltly1, file = "../docs/slides/plotly/slideres_plotly.RData")
+save(pltly1, file = "./docs/slides/plotly/slideres_plotly.RData")
 ```
 
 Omnisicent-mc version (slides only)
 
 ```{r, fig.width = 6, fig.height = 4, dpi = 300}
-slideresdf <- resultMatrix_omni %>% 
-  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
-                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
-         metric = plyr::mapvalues(metric, 
-                                  from = c("nrmse", "rrmse"),
-                                  to = c("nRMSE", "rRMSE")),
-         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
-                              to = c("mc:BAM", "mc:Met", "mc:Omni")))
-
 slideresdf <- resultMatrix_omni %>%
   mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
                               to = c("fl:BAM", "fl:Met", "fl:Omni")),
@@ -225,15 +207,63 @@ slideresgg <- ggplot(slideresdf, aes(x = fl, y = result, text = case)) +
 
 slideresgg
 
-ggsave("../graphs/slides/mcflo-omni-res-boxplots.png")
+ggsave("./graphs/slides/mcflo-omni-res-boxplots.png")
 
 slideresgg_plotly <- slideresgg
 slideresgg_plotly$layers <- slideresgg$layers[-1]
 pltly1 <- ggplotly(slideresgg_plotly, tooltip = "text")
 pltly1
-save(pltly1, file = "../docs/slides/plotly/slideres_omni_plotly.RData")
+save(pltly1, file = "./docs/slides/plotly/slideres_omni_plotly.RData")
 ```
 
+Split off omniscient results.
+
+```{r}
+
+slideresdf <- resultMatrix_omni %>%
+  select(-msg) %>% 
+  mutate(fl = plyr::mapvalues(fl, from = c("bam_man", "metroman", "omniscient"),
+                              to = c("fl:BAM", "fl:Met", "fl:Omni")),
+         metric = plyr::mapvalues(metric,
+                                  from = c("nrmse", "rrmse"),
+                                  to = c("nRMSE", "rRMSE")),
+         mc = plyr::mapvalues(mc, from = c("bam", "metroman", "omniscient"),
+                              to = c("mc:BAM", "mc:Met", "mc:Omni")),
+         method = ifelse(fl == "fl:Omni", "MC only", method)) %>% 
+  unique()
+
+slideresgg <- ggplot(slideresdf, aes(x = fl, y = result, text = case)) + 
+  # geom_line() +
+  geom_boxplot(aes(fill = mc, group = paste0(mc, fl)), outlier.shape = NA) +
+  geom_point(aes(fill = mc, group = paste0(mc, fl)), 
+             shape = 21, alpha = 0.6,
+             position = position_jitterdodge(dodge.width = 0.75, 
+                                             jitter.width = 0.1)) +
+  geom_hline(yintercept = 0.35, linetype = 2) +
+  facet_grid(metric ~ method, scales = "free", space = "free_x") +
+  mytheme +
+  scale_y_continuous(name = NULL) + 
+  scale_x_discrete(name = NULL) +
+  scale_fill_discrete(name = NULL) +
+  theme(legend.position = "bottom")
+
+slideresgg_plotly <- slideresgg
+slideresgg_plotly$layers <- slideresgg$layers[-1]
+pltly1 <- ggplotly(slideresgg_plotly, tooltip = "text")
+pltly1
+slideresgg
+```
+
+Table distilling results
+
+```{r}
+slideresdf %>% 
+  # filter(mc != "mc:Omni", fl != "fl:Omni") %>%
+  filter(mc == "mc:Omni", fl != "fl:Omni") %>%
+  group_by(metric, method, fl, mc, method) %>% 
+  summarize(median = median(result), max = max(result), min = min(result)) %>% 
+  kable(digits = 2)
+```
 
 
 Table of how many successfully converged
