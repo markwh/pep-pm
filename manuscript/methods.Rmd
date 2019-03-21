@@ -11,17 +11,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Methods
 
-A discharge estimation algorithm is a function, $g$, of parameters, $\theta$, and data, $\mathbf{x}$. The values of this function constitute predictions of dischrge, $\hat{Q}$ at a particular time, $t$, and location, $s$. That is:
+Here we consider a discharge estimation algorithm as a function, $g$, of parameters, $\theta$, and data, $\mathbf{x}$. The values of this function constitute predictions of dischrge, $\hat{Q}$ at a particular time, $t$, and location, $s$. That is:
 
 $$
 \hat{Q}_{st} = g(\theta, \mathbf{x})
 $$
 
-In order to assess the performance of a given discharge algorithm, we rely on benchmark datasets that contain both $\mathbf{x}$--as would be available to SWOT--as well as values of true discharge, $Q_{st}$--which would not.
+In order to assess the performance of a given discharge algorithm, we rely on benchmark datasets that contain both $\mathbf{x}$--as would be available to SWOT--as well as values of true discharge, $Q_{st}$, and channel cross-sectional area, $A_{st}$--which would not.
 
 There are at least two definitions of "best" parameters, $\theta$. One uses a physical and statistical interpretation to obtain "true" parameters from SWOT and ancillary data (including true discharge and channel geometry). A second explicitly sets up an optimization problem using a pefrormance meteric calculated from true and predicted discharge. 
 
-The best-achievable performance of a discharge algorithm is defined in relation to a performance metric, which summarizes the mismatch between $\hat{Q}$ and true discharge, $Q$, over a number of of locations and times. There are at least two interpretations of this. 
+The best achievable performance of a discharge algorithm is defined in relation to a performance metric, which summarizes the mismatch between $\hat{Q}$ and true discharge, $Q$, over a number of locations and times. The "best" parameters, $\theta^*$, are those that achieve this optimal performance statistic. Note that the best parameters are specific to the choice of performance metric, algorithm, and dataset. Furthermore, the best parameters are not guaranteed to be uniquely determined. 
+
+As a comparison to the "best" parameters, we also consider the "truest" parameters from a physical/statistical standpoint. Some flow-law parameters have physical interpretations, including those related to river bathymetry, although it is by no means guaranteed that using the true values will achieve the optimal performance statistic. Other parameters can be interpreted statistically, e.g. as the coefficients of a least-squares regression. The algorithm performance achieved using these "truest" parameters, $\theta^+$, is also determined, as an alternative performance ceiling.
 
 
 ### Datasets
@@ -110,7 +112,7 @@ $$
 - Manning parameters are $A_{0,s}, s = 1, \dots , N_s$ and $n$
 - For numerical stability in optimizing, it is preferable to use $\log A_{0,s}$ and $\log n$. 
 
-#### MetroMan, depth-varying flow resistance
+#### Depth-varying flow resistance
 
 The depth-variable Manning equation is more complex, as it allows $n$ to vary in space and time, according to a location-specific power-law relationship with river depth (calculated as the ratio of cross-sectoinal area to width). This flow law has the following form:
 
